@@ -25,7 +25,7 @@ export default defineNuxtConfig({
         config.plugins.push(vuetify({ autoImport: true }))
       })
     },
-    //...
+    
   ],
 
   vite: {
@@ -35,6 +35,7 @@ export default defineNuxtConfig({
       },
     },
   },
+ 
 
   compatibilityDate: '2024-11-01',
 })
