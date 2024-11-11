@@ -1,65 +1,104 @@
 <template>
-  <div class="min-h-screen bg-gradient-to-br from-gray-100 to-gray-200 p-6">
-    <div class="container mx-auto">
-      <!-- ส่วนหัวพร้อมสัญลักษณ์สด -->
-      <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
-        <div class="flex items-center space-x-4">
-          <h1 class="text-4xl font-bold text-gray-900">ระบบติดตามเซ็นเซอร์</h1>
-          <div 
-            class="flex items-center space-x-2 bg-red-500 text-white px-3 py-1 rounded-full animate-pulse"
-          >
-            <div class="w-2 h-2 bg-white rounded-full"></div>
-            <span class="text-sm font-medium">ถ่ายทอดสด</span>
-          </div>
-        </div>
-        
-        <!-- ตัวควบคุมช่วงวันที่ -->
-        <div class="flex flex-wrap gap-4 items-center">
+  <div class="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-8">
+    <div class="max-w-7xl mx-auto">
+      <!-- Header -->
+      <div class="text-center mb-8">
+        <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-2">
+          ระบบติดตามการใช้พลังงาน
+        </h1>
+        <p class="text-gray-600">ติดตามและวิเคราะห์การใช้พลังงานไฟฟ้าของคุณ</p>
+      </div>
+
+      <!-- Date Range Selector -->
+      <div class="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6 mb-8">
+        <div class="flex flex-wrap gap-6 items-end justify-center">
           <div class="form-control">
-            <label class="label">
-              <span class="label-text text-gray-700">วันที่เริ่มต้น</span>
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              วันที่เริ่มต้น
             </label>
             <input 
               type="datetime-local" 
               v-model="startDate"
-              class="input input-bordered bg-white hover:border-blue-500 transition-colors" 
+              class="input input-bordered w-full max-w-xs bg-white/90" 
             />
           </div>
           <div class="form-control">
-            <label class="label">
-              <span class="label-text text-gray-700">วันที่สิ้นสุด</span>
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              วันที่สิ้นสุด
             </label>
             <input 
               type="datetime-local" 
               v-model="endDate"
-              class="input input-bordered bg-white hover:border-blue-500 transition-colors" 
+              class="input input-bordered w-full max-w-xs bg-white/90" 
             />
           </div>
           <button 
-  @click="fetchData" 
-  class="btn btn-primary mt-6 hover:bg-blue-700 transition-colors flex items-center"
->
-  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-    <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
-  </svg>
-  อัปเดตข้อมูล
-</button>
+            @click="fetchData" 
+            class="btn btn-primary"
+            :class="{ 'loading': isLoading }"
+          >
+            {{ isLoading ? 'กำลังโหลด...' : 'อัปเดตข้อมูล' }}
+          </button>
         </div>
       </div>
 
-      <!-- การ์ดกราฟหลัก -->
-      <div class="card bg-white shadow-2xl rounded-2xl overflow-hidden mb-6 border-t-4 border-blue-500">
-        <div class="card-body p-6">
-          <div class="flex justify-between items-center mb-4">
-            <h2 class="card-title text-2xl font-bold text-gray-800">
-              ข้อมูลเซ็นเซอร์รวม
-            </h2>
-            <div class="badge badge-primary badge-outline">
-              การวิเคราะห์แบบเรียลไทม์
+      <!-- Stats Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="stat bg-white/80 backdrop-blur-sm rounded-xl shadow-lg">
+          <div class="stat-figure text-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="w-8 h-8 stroke-current"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          </div>
+          <div class="stat-title">การใช้พลังงานรวม</div>
+          <div class="stat-value text-primary">{{ totalKwh.toFixed(2) }} kWh</div>
+          <div class="stat-desc">ในช่วงเวลาที่เลือก</div>
+        </div>
+        
+        <div class="stat bg-white/80 backdrop-blur-sm rounded-xl shadow-lg">
+          <div class="stat-figure text-secondary">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="w-8 h-8 stroke-current"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+          </div>
+          <div class="stat-title">กำลังไฟฟ้าเฉลี่ย</div>
+          <div class="stat-value text-secondary">{{ averagePower.toFixed(1) }} W</div>
+          <div class="stat-desc">ค่าเฉลี่ยในช่วงเวลา</div>
+        </div>
+        
+        <div class="stat bg-white/80 backdrop-blur-sm rounded-xl shadow-lg">
+          <div class="stat-figure text-accent">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="w-8 h-8 stroke-current"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>
+          </div>
+          <div class="stat-title">ค่าไฟฟ้าประมาณการ</div>
+          <div class="stat-value">฿{{ estimatedCost.toFixed(2) }}</div>
+          <div class="stat-desc">คำนวณจากอัตรา TOU</div>
+        </div>
+
+        <div class="stat bg-white/80 backdrop-blur-sm rounded-xl shadow-lg">
+          <div class="stat-figure text-info">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="w-8 h-8 stroke-current"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+          </div>
+          <div class="stat-title">อัปเดตล่าสุด</div>
+          <div class="stat-value text-info text-lg">{{ lastUpdated }}</div>
+          <div class="stat-desc">เวลาล่าสุดที่บันทึก</div>
+        </div>
+      </div>
+
+      <!-- Power Consumption Graph -->
+      <div class="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg overflow-hidden mb-8">
+        <div class="p-6">
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-xl font-bold text-gray-800">กราฟแสดงการใช้พลังงาน</h2>
+            <div class="flex gap-2">
+              <button 
+                v-for="period in ['1H', '6H', '1D', '1W', '1M']" 
+                :key="period"
+                @click="setQuickPeriod(period)"
+                class="btn btn-sm"
+                :class="{'btn-primary': selectedPeriod === period}"
+              >
+                {{ period }}
+              </button>
             </div>
           </div>
-          
-          <div class="w-full h-[500px]">
+          <div class="w-full h-[500px] bg-white/90 rounded-lg p-4">
             <client-only>
               <Line
                 v-if="sensorData.length"
@@ -68,173 +107,45 @@
                 class="h-full w-full"
               />
               <div v-else class="flex items-center justify-center h-full">
-                <span class="loading loading-spinner loading-lg text-blue-500"></span>
+                <div class="animate-pulse text-gray-400">กำลังโหลดข้อมูล...</div>
               </div>
             </client-only>
           </div>
         </div>
       </div>
 
-      <!-- การ์ดค่าปัจจุบัน -->
-      <!-- <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mt-6">
-        <div 
-          v-for="(value, key) in latestValues" 
-          :key="key" 
-          class="card bg-white shadow-md hover:shadow-xl transition-all transform hover:-translate-y-2 rounded-xl border-l-4 border-blue-500"
-        >
-          <div class="card-body p-4">
-            <div class="flex justify-between items-center mb-2">
-              <h3 class="text-sm font-medium text-gray-600">
-                {{ formatLabel(key) }}
-              </h3>
-              <div class="badge badge-ghost">ปัจจุบัน</div>
-            </div>
-            <p class="text-2xl font-bold text-gray-800 flex items-center">
-              {{ formatValue(value, key) }}
-            </p>
+      <!-- Monthly Usage Table -->
+      <div class="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg overflow-hidden">
+        <div class="p-6">
+          <h2 class="text-xl font-bold text-gray-800 mb-4">สรุปการใช้พลังงานรายเดือน</h2>
+          <div class="overflow-x-auto">
+            <table class="table table-zebra w-full">
+              <thead>
+                <tr>
+                  <th>เดือน</th>
+                  <th>การใช้พลังงาน (kWh)</th>
+                  <th>ค่าไฟฟ้าประมาณการ (บาท)</th>
+                  <th>กำลังไฟฟ้าเฉลี่ย (W)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(month, index) in monthlyUsage" :key="index">
+                  <td>{{ month.month }}</td>
+                  <td>{{ month.kwh.toFixed(2) }}</td>
+                  <td>{{ month.cost.toFixed(2) }}</td>
+                  <td>{{ month.avgPower.toFixed(1) }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
-      </div> -->
-    </div>
-  </div>
-
-
-<!-- เพิ่มหลัง card ค่าปัจจุบัน -->
-<div v-if="sensorStatistics" class="mt-6 bg-white shadow-md rounded-xl p-6">
-  <h2 class="text-2xl font-bold text-gray-800 mb-4">สรุปสถิติและคุณภาพพลังงาน</h2>
-  
-  <!-- ตารางสรุปสถิติ -->
-  <div class="overflow-x-auto">
-    <table class="w-full text-sm text-left text-gray-500">
-  <thead class="text-xs text-gray-700 uppercase bg-gray-50">
-    <tr>
-      <th class="px-4 py-3">หมวดหมู่</th>
-      <th class="px-4 py-3">ต่ำสุด</th>
-      <th class="px-4 py-3">สูงสุด</th>
-      <th class="px-4 py-3">เฉลี่ย</th>
-      <th class="px-4 py-3">จำนวนค่าผิดปกติ</th>
-      <th class="px-4 py-3">อัตราค่าผิดปกติ</th>
-      <th class="px-4 py-3">สถานะ</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr 
-      v-for="stat in summaryStatistics" 
-      :key="stat.category"
-      class="border-b hover:bg-gray-50 transition-colors"
-    >
-      <td class="px-4 py-3 font-medium text-gray-900">
-        {{ stat.category }}
-      </td>
-      <td class="px-4 py-3">{{ stat.min }}</td>
-      <td class="px-4 py-3">{{ stat.max }}</td>
-      <td class="px-4 py-3">{{ stat.avg }}</td>
-      <td class="px-4 py-3">
-        <span 
-          :class="{
-            'text-green-600': stat.anomalies === 0,
-            'text-yellow-600': stat.anomalies > 0 && stat.anomalies <= 5,
-            'text-red-600': stat.anomalies > 5
-          }"
-        >
-          {{ stat.anomalies }} ค่า
-        </span>
-      </td>
-      <td class="px-4 py-3">
-        <span 
-          :class="{
-            'text-green-600': parseFloat(stat.anomalyRate) <= 10,
-            'text-yellow-600': parseFloat(stat.anomalyRate) > 10 && parseFloat(stat.anomalyRate) <= 20,
-            'text-red-600': parseFloat(stat.anomalyRate) > 20
-          }"
-        >
-          {{ stat.anomalyRate }}
-        </span>
-      </td>
-      <td class="px-4 py-3">
-        <span 
-          :class="{
-            'text-green-600': stat.stability === 'เสถียร',
-            'text-red-600': stat.stability === 'ไม่เสถียร'
-          }"
-        >
-          {{ stat.stability }}
-        </span>
-      </td>
-    </tr>
-  </tbody>
-</table>
-  </div>
-
-  <!-- คุณภาพพลังงาน -->
-  <div v-if="sensorStatistics?.energyQuality" class="mt-6">
-    
-    <h3 class="text-xl font-semibold text-gray-800 mb-4">คุณภาพพลังงาน</h3>
-    <div v-if="sensorStatistics?.energyQuality" class="mt-6 bg-gray-50 p-4 rounded-lg">
-    <h3 class="text-xl font-semibold text-gray-800 mb-4">คำแนะนำการปรับปรุง</h3>
-    <ul class="space-y-2">
-      <li v-if="sensorStatistics.energyQuality.powerFactor.status !== 'ดี'" 
-          class="text-yellow-600 flex items-center">
-        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-        </svg>
-        {{ sensorStatistics.energyQuality.powerFactor.recommendation }}
-      </li>
-      <!-- เพิ่มคำแนะนำสำหรับฮาร์โมนิกและประสิทธิภาพพลังงานในทำนองเดียวกัน -->
-    </ul>
-  </div>
-
-    <div class="grid grid-cols-3 gap-4 mt-6">
-      <div class="bg-gray-50 p-4 rounded-lg">
-        <h4 class="font-medium text-gray-700 mb-2">ตัวประกอบกำลัง</h4>
-        <p 
-          :class="{
-            'text-green-600': sensorStatistics.energyQuality.powerFactor.status === 'ดี',
-            'text-yellow-600': sensorStatistics.energyQuality.powerFactor.status === 'พอใช้',
-            'text-red-600': sensorStatistics.energyQuality.powerFactor.status === 'ต้องปรับปรุง'
-          }"
-        >
-          {{ sensorStatistics.energyQuality.powerFactor.status }}
-        </p>
-      </div>
-      <div class="bg-gray-50 p-4 rounded-lg">
-        <h4 class="font-medium text-gray-700 mb-2">ฮาร์โมนิก</h4>
-        <p 
-          :class="{
-            'text-green-600': sensorStatistics.energyQuality.harmonicDistortion.status === 'ต่ำ',
-            'text-yellow-600': sensorStatistics.energyQuality.harmonicDistortion.status === 'ปานกลาง',
-            'text-red-600': sensorStatistics.energyQuality.harmonicDistortion.status === 'สูง'
-          }"
-        >
-          {{ sensorStatistics.energyQuality.harmonicDistortion.status }}
-        </p>
-      </div>
-      <div class="bg-gray-50 p-4 rounded-lg">
-        <h4 class="font-medium text-gray-700 mb-2">ประสิทธิภาพพลังงาน</h4>
-        <p 
-          :class="{
-            'text-green-600': sensorStatistics.energyQuality.energyEfficiency.status === 'ประหยัด',
-            'text-yellow-600': sensorStatistics.energyQuality.energyEfficiency.status === 'ปานกลาง',
-            'text-red-600': sensorStatistics.energyQuality.energyEfficiency.status === 'สูง'
-          }"
-        >
-          {{ sensorStatistics.energyQuality.energyEfficiency.status }}
-        </p>
       </div>
     </div>
   </div>
-  
-</div>
-
-
-
-<div v-if="isLoading" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-  <span class="loading loading-spinner loading-lg text-white"></span>
-</div>
 </template>
 
-<script setup>
-import { ref, computed, onMounted } from 'vue'
+<script setup lang="ts">
+import { ref, computed } from 'vue';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -243,11 +154,13 @@ import {
   LineElement,
   Title,
   Tooltip,
-  Legend
-} from 'chart.js'
-import { Line } from 'vue-chartjs'
+  Legend,
+  Filler
+} from 'chart.js';
+import { Line } from 'vue-chartjs';
+import { format, subHours, subDays, subMonths } from 'date-fns';
+import { th } from 'date-fns/locale';
 
-// Chart.js Registration
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -255,513 +168,305 @@ ChartJS.register(
   LineElement,
   Title,
   Tooltip,
-  Legend
-)
+  Legend,
+  Filler
+);
 
-// State Variables
-const sensorData = ref([])
-const startDate = ref('')
-const endDate = ref('')
-const isLoading = ref(false)
-const error = ref(null)
+// Define constants for electricity rates
+const PEAK_RATE = 5.7982; // บาท/หน่วย (09:00-22:00)
+const OFF_PEAK_RATE = 2.6369; // บาท/หน่วย (22:00-09:00)
+const FT_RATE = 0.5; // ค่า Ft
+const SERVICE_CHARGE = 38.22; // ค่าบริการรายเดือน
 
-// Chart Options Configuration
+interface SensorData {
+  timestamp: string;
+  power: number;
+  voltage?: number; // Optional properties
+  current?: number; // Optional properties
+  energy?: number; // Optional properties
+  frequency?: number; // Optional properties
+  pf?: number; // Optional properties
+}
+
+const startDate = ref('');
+const endDate = ref('');
+const isLoading = ref(false);
+const selectedPeriod = ref('1D');
+const sensorData = ref<SensorData[]>([]);
+
+const totalKwh = computed(() => {
+  if (!sensorData.value.length) return 0;
+  const firstTimestamp = sensorData.value[0].timestamp;
+  const lastTimestamp = sensorData.value[sensorData.value.length - 1].timestamp;
+  const hours = (new Date(lastTimestamp).getTime() - new Date(firstTimestamp).getTime()) / (1000 * 60 * 60);
+  const avgPower = sensorData.value.reduce((sum, reading) => sum + reading.power, 0) / sensorData.value.length;
+  return (avgPower * hours) / 1000;
+});
+
+const averagePower = computed(() => {
+  if (!sensorData.value.length) return 0;
+  return sensorData.value.reduce((sum, reading) => sum + reading.power, 0) / sensorData.value.length;
+});
+
+const estimatedCost = computed(() => {
+  const kwh = totalKwh.value;
+
+  // ตรวจสอบว่ามีการใช้พลังงาน
+  if (kwh === 0) return 0;
+
+  const peakKwh = kwh * 0.7;
+  const offPeakKwh = kwh * 0.3;
+  return (peakKwh * PEAK_RATE + offPeakKwh * OFF_PEAK_RATE) + 
+         (kwh * FT_RATE) + SERVICE_CHARGE;
+});
+
+const lastUpdated = computed(() => {
+  if (!sensorData.value.length) return 'ไม่มีข้อมูล';
+  return format(
+    new Date(sensorData.value[sensorData.value.length - 1].timestamp),
+    "d MMMM yyyy HH:mm:ss", 
+    { locale: th }
+  );
+});
+
+const monthlyUsage = computed(() => {
+  if (!sensorData.value.length) return [];
+
+  const monthlyData: any = {};
+
+  // Filter sensor data based on selected date range
+  const filteredData = sensorData.value.filter(reading => {
+    const readingDate = new Date(reading.timestamp);
+    const start = new Date(startDate.value);
+    const end = new Date(endDate.value);
+    return readingDate >= start && readingDate <= end;
+  });
+
+  filteredData.forEach((reading) => {
+    const date = new Date(reading.timestamp);
+    const monthKey = format(date, 'yyyy-MM');
+    const monthDisplay = format(date, 'MMMM yyyy', { locale: th });
+
+    if (!monthlyData[monthKey]) {
+      monthlyData[monthKey] = {
+        month: monthDisplay,
+        readings: [],
+        totalPower: 0,
+        hours: 0
+      };
+    }
+
+    monthlyData[monthKey].readings.push(reading);
+    monthlyData[monthKey].totalPower += reading.power;
+  });
+
+  return Object.values(monthlyData).map(month => {
+    const avgPower = month.totalPower / month.readings.length;
+    const hours = (new Date(month.readings[month.readings.length - 1].timestamp) - 
+                  new Date(month.readings[0].timestamp)) / (1000 * 60 * 60);
+    const kwh = (avgPower * hours) / 1000;
+    const peakKwh = kwh * 0.7;
+    const offPeakKwh = kwh * 0.3;
+    const cost = (peakKwh * PEAK_RATE + offPeakKwh * OFF_PEAK_RATE) + 
+                 (kwh * FT_RATE) + SERVICE_CHARGE;
+
+    return {
+      month: month.month,
+      kwh,
+      cost,
+      avgPower
+    };
+  });
+});
+
 const chartOptions = {
   responsive: true,
   maintainAspectRatio: false,
   interaction: {
-    mode: 'index',
     intersect: false,
+    mode: "nearest" as "nearest" // Add this assertion
   },
   plugins: {
     legend: {
-      position: 'top',
-      labels: {
-        usePointStyle: true,
-        padding: 20,
-        font: {
-          family: "'Inter', sans-serif",
-          size: 12
-        }
-      }
+      display: false
     },
     tooltip: {
-      mode: 'index',
-      intersect: false
+      backgroundColor: 'rgba(255, 255, 255, 0.98)',
+      titleColor: '#1e293b',
+      bodyColor: '#1e293b',
+      borderColor: '#e2e8f0',
+      borderWidth: 1,
+      padding: 12,
+      displayColors: false,
+      titleFont: {
+        size: 14,
+        weight: 800
+      },
+      bodyFont: {
+        size: 13
+      },
+      callbacks: {
+  title: (context) => {
+    const date = new Date(sensorData.value[context[0].dataIndex].timestamp);
+    return format(date, "EEEE d MMMM yyyy HH:mm:ss", { locale: th });
+  },
+  label: (context) => {
+    const reading = sensorData.value[context.dataIndex];
+    return [
+      `กำลังไฟฟ้า: ${reading.power.toFixed(1)} วัตต์`,
+      `แรงดัน: ${reading?.voltage?.toFixed(1)} V`,
+      `กระแส: ${reading?.current?.toFixed(2)} A`,
+      `ตัวประกอบกำลัง: ${reading.pf}`
+    ];
+  }
+}
     }
   },
   scales: {
-    y: {
-      type: 'linear',
-      display: true,
-      position: 'left',
+    x: {
       grid: {
-        drawOnChartArea: true,
-        color: 'rgba(0, 0, 0, 0.05)'
+        display: false
+      },
+      ticks: {
+        maxRotation: 45,
+        minRotation: 45,
+        callback: (value: number, index: number) => {
+          const date = new Date(sensorData.value[index].timestamp);
+          return format(date, "HH:mm", { locale: th });
+        }
+      }
+    },
+    y: {
+      beginAtZero: true,
+      grid: {
+        color: 'rgba(0, 0, 0, 0.06)',
+        lineWidth: 1
+      },
+      ticks: {
+        callback: (value: number) => `${value}W`,
+        font: {
+          weight: 500
+        }
       }
     }
   },
   elements: {
     line: {
-      tension: 0.3 
+      tension: 0.4,
+      borderWidth: 2.5,
+      borderColor: 'rgb(37, 99, 235)',
+      fill: true,
+      backgroundColor: (context: { chart: { ctx: CanvasRenderingContext2D } }) => {
+        const ctx = context.chart.ctx;
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(37, 99, 235, 0.3)');
+        gradient.addColorStop(1, 'rgba(37, 99, 235, 0.02)');
+        return gradient;
+      }
     },
     point: {
-      radius: 2 
+      radius: 0,
+      hoverRadius: 8,
+      backgroundColor: 'rgb(37, 99, 235)',
+      hoverBackgroundColor: 'white',
+      hoverBorderColor: 'rgb(37, 99, 235)',
+      hoverBorderWidth: 3
     }
   }
-}
-const formatTimestamp = computed(() => {
-  if (!sensorData.value.length) return 'ไม่มีข้อมูล'
-  const lastTimestamp = sensorData.value[sensorData.value.length - 1].timestamp
-  return lastTimestamp 
-    ? new Date(lastTimestamp).toLocaleString() 
-    : 'ไม่สามารถอ่านค่าได้'
-})
+};
 
-
-// Combined Chart Data
 const chartData = computed(() => ({
-  labels: sensorData.value.map(d => formatDate(d.timestamp)),
+  labels: sensorData.value.map(d => format(new Date(d.timestamp), 'HH:mm')),
   datasets: [
     {
-      label: 'Voltage (V)',
-      data: sensorData.value.map(d => d.voltage),
-      borderColor: 'rgb(59, 130, 246)', 
-      backgroundColor: 'rgba(59, 130, 246, 0.5)',
-      yAxisID: 'y'
-    },
-    {
-      label: 'Current (A)',
-      data: sensorData.value.map(d => d.current),
-      borderColor: 'rgb(234, 88, 12)', 
-      backgroundColor: 'rgba(234, 88, 12, 0.5)',
-      yAxisID: 'y'
-    },
-    {
-      label: 'Power (W)',
+      label: 'กำลังไฟฟ้า',
       data: sensorData.value.map(d => d.power),
-      borderColor: 'rgb(34, 197, 94)', 
-      backgroundColor: 'rgba(34, 197, 94, 0.5)',
-      yAxisID: 'y'
-    },
-    {
-      label: 'Energy (kWh)',
-      data: sensorData.value.map(d => d.energy),
-      borderColor: 'rgb(168, 85, 247)', 
-      backgroundColor: 'rgba(168, 85, 247, 0.5)',
-      yAxisID: 'y'
-    },
-    {
-      label: 'Frequency (Hz)',
-      data: sensorData.value.map(d => d.frequency),
-      borderColor: 'rgb(236, 72, 153)', 
-      backgroundColor: 'rgba(236, 72, 153, 0.5)',
-      yAxisID: 'y'
-    },
-    {
-      label: 'Power Factor',
-      data: sensorData.value.map(d => d.pf),
-      borderColor: 'rgb(45, 212, 191)', 
-      backgroundColor: 'rgba(45, 212, 191, 0.5)',
-      yAxisID: 'y'
     }
   ]
-}))
+}));
 
-// Latest values for cards
-const latestValues = computed(() => {
-  if (!sensorData.value.length) return {}
-  const latest = sensorData.value[sensorData.value.length - 1]
-  return {
-    id: latest.id || 'N/A',
-    voltage: `${latest.voltage.toFixed(2)}V`,
-    current: `${latest.current.toFixed(2)}A`,
-    power: `${latest.power.toFixed(2)}W`,
-    energy: `${latest.energy.toFixed(2)}kWh`,
-    frequency: `${latest.frequency.toFixed(2)}Hz`,
-    pf: latest.pf.toFixed(2),
-    timestamp: formatTimestamp.value
+const setQuickPeriod = (period: string) => {
+  selectedPeriod.value = period;
+  const end = new Date();
+  let start:any;
+
+  switch (period) {
+    case '1H':
+      start = subHours(end, 1);
+      break;
+    case '6H':
+      start = subHours(end, 6);
+      break;
+    case '1D':
+      start = subDays(end, 1);
+      break;
+    case '1W':
+      start = subDays(end, 7);
+      break;
+    case '1M':
+      start = subMonths(end, 1);
+      break;
   }
-})
 
-const validateSensorData = (data) => {
-  const requiredFields = [
-    'id', 'voltage', 'current', 'power', 
-    'energy', 'frequency', 'pf', 'timestamp'
-  ]
+  startDate.value = start.toISOString().slice(0, 16);
+  endDate.value = end.toISOString().slice(0, 16);
+  fetchData();
+};
 
-  return data.map(item => {
-    // สร้างออบเจ็กต์ใหม่เพื่อป้องกันการแก้ไขข้อมูลต้นฉบับ
-    const validatedItem = {...item}
-    
-    requiredFields.forEach(field => {
-      // ถ้าไม่มีค่าหรือเป็น null ให้ใส่ค่าเริ่มต้น
-      if (validatedItem[field] === undefined || validatedItem[field] === null) {
-        switch(field) {
-          case 'id':
-            validatedItem[field] = 'N/A'
-            break
-          case 'timestamp':
-            validatedItem[field] = new Date().toISOString()
-            break
-          default:
-            validatedItem[field] = 0
-        }
-      }
-    })
-
-    return validatedItem
-  })
-}
-
-// Helper functions
-const formatDate = (dateStr) => {
-  return new Date(dateStr).toLocaleString()
-}
-
-const formatLabel = (key) => {
-  const labels = {
-    voltage: 'แรงดันไฟฟ้า',
-    current: 'กระแสไฟฟ้า',
-    power: 'กำลังไฟฟ้า',
-    energy: 'พลังงาน',
-    frequency: 'ความถี่',
-    pf: 'ตัวประกอบกำลัง'
-  }
-  return labels[key] || key
-}
-
-const formatValue = (value, key) => {
-  const units = {
-    voltage: 'V',
-    current: 'A',
-    power: 'W',
-    energy: 'kWh',
-    frequency: 'Hz',
-    pf: ''
-  }
-  return `${Number(value).toFixed(2)}${units[key] || ''}`
-}
 const fetchData = async () => {
-  // Prevent multiple simultaneous requests
-  if (isLoading.value) return
+  if (!startDate.value || !endDate.value) {
+    alert('กรุณาระบุช่วงเวลาที่ต้องการ');
+    return;
+  }
 
-  isLoading.value = true
-  error.value = null
-  
+  isLoading.value = true;
+
   try {
-    // Add timeout and abort controller
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 seconds timeout
-
     const response = await fetch(
-      `http://localhost:4000/get-sensor-history?start=${startDate.value}&end=${endDate.value}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        signal: controller.signal
-      }
-    )
-
-    clearTimeout(timeoutId)
+      `http://localhost:4000/get-sensor-history?start=${startDate.value}&end=${endDate.value}`
+    );
 
     if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`)
+      throw new Error('ไม่สามารถดึงข้อมูลได้');
     }
 
-    const data = await response.json()
-    const validatedData = validateSensorData(data)
-    
-    sensorData.value = validatedData
-    if (!Array.isArray(data) || data.length === 0) {
-      throw new Error('No data received')
-    }
+    const data = await response.json();
 
-    // Update data and statistics
-    sensorData.value = validatedData
-    sensorStatistics.value = {
-      metrics: calculateStatistics(data),
-      anomalies: detectAnomalies(data),
-      energyQuality: assessEnergyQuality(data)
+    // ตรวจสอบข้อมูลที่ได้รับ
+    if (Array.isArray(data) && data.every(item => 'timestamp' in item && 'power' in item)) {
+      sensorData.value = data as SensorData[];
+    } else {
+      throw new Error('ข้อมูลไม่ถูกต้อง');
     }
-
-    // Optional: Add a toast notification for successful data fetch
-    if (process.client) {
-      const toast = useToast()
-      toast.success('Data updated successfully', { 
-        position: 'top-right', 
-        duration: 2000 
-      })
-    }
-  } catch (err) {
-    console.error('Detailed Fetch Error:', {
-      message: err.message,
-      name: err.name,
-      stack: err.stack
-    })
-
-    error.value = err.message || 'An unexpected error occurred'
-    
-    // Show error toast
-    if (process.client) {
-      const toast = useToast()
-      toast.error(error.value, {
-        position: 'top-right',
-        duration: 3000
-      })
-    }
+  } catch (error) {
+    console.error('Error:', error);
+    alert('เกิดข้อผิดพลาดในการดึงข้อมูล');
   } finally {
-    isLoading.value = false
+    isLoading.value = false;
   }
-}
+};
 
-// Initialize date range to last hour
-onMounted(() => {
-  const end = new Date()
-  const start = new Date()
-  start.setHours(start.getHours() - 1)
+// Initialize with last 24 hours
+const initializeDateRange = () => {
+  const end = new Date();
+  const start = subDays(end, 1);
   
-  startDate.value = start.toISOString().slice(0, 16)
-  endDate.value = end.toISOString().slice(0, 16)
-  
-  fetchData()
-})
+  startDate.value = start.toISOString().slice(0, 16);
+  endDate.value = end.toISOString().slice(0, 16);
+};
 
-// Optional: Reactive data refresh
-const refreshInterval = ref(null)
-const startAutoRefresh = () => {
-  refreshInterval.value = setInterval(() => {
-    fetchData()
-  }, 30000) // Refresh every 30 seconds
-}
-
-const stopAutoRefresh = () => {
-  if (refreshInterval.value) {
-    clearInterval(refreshInterval.value)
-  }
-}
-
-// Lifecycle hooks
-onMounted(startAutoRefresh)
-onUnmounted(stopAutoRefresh)
-// เพิ่ม state สำหรับสถิติ
-const sensorStatistics = ref(null)
-
-// เพิ่มฟังก์ชันคำนวณสถิติ
-const calculateStatistics = (data) => {
-  if (!data || data.length === 0) return null
-
-  const statistics = {
-    voltage: calculateMetrics(data, 'voltage'),
-    current: calculateMetrics(data, 'current'),
-    power: calculateMetrics(data, 'power'),
-    energy: calculateMetrics(data, 'energy'),
-    frequency: calculateMetrics(data, 'frequency'),
-    pf: calculateMetrics(data, 'pf')
-  }
-
-  return statistics
-}
-
-const calculateMetrics = (data, key) => {
-  const values = data.map(item => item[key])
-  return {
-    min: Math.min(...values),
-    max: Math.max(...values),
-    avg: values.reduce((a, b) => a + b, 0) / values.length,
-    total: values.reduce((a, b) => a + b, 0)
-  }
-}
-
-// เพิ่มการประเมินความผิดปกติ
-const detectAnomalies = (data) => {
-  const anomalies = {}
-  const keys = ['voltage', 'current', 'power', 'energy', 'frequency', 'pf']
-
-  keys.forEach(key => {
-    const stats = calculateMetrics(data, key)
-    const stdDev = calculateStandardDeviation(data.map(item => item[key]))
-    
-    anomalies[key] = {
-      outliers: data.filter(item => 
-        Math.abs(item[key] - stats.avg) > (2 * stdDev)
-      ),
-      isUnstable: stdDev > (stats.avg * 0.2) // ถ้า std dev เกิน 20% ของค่าเฉลี่ย
-    }
-  })
-
-  return anomalies
-}
-
-const calculateStandardDeviation = (values) => {
-  const avg = values.reduce((a, b) => a + b, 0) / values.length
-  const squareDiffs = values.map(value => Math.pow(value - avg, 2))
-  const avgSquareDiff = squareDiffs.reduce((a, b) => a + b, 0) / values.length
-  return Math.sqrt(avgSquareDiff)
-}
-
-// เพิ่มการประเมินคุณภาพพลังงาน
-const assessEnergyQuality = (data) => {
-  if (!data || data.length === 0) return null
-
-  const lastEntry = data[data.length - 1]
-  
-  return {
-    powerFactor: {
-      value: lastEntry.pf,
-      status: lastEntry.pf >= 0.9 ? 'ดี' : 
-              lastEntry.pf >= 0.7 ? 'พอใช้' : 'ต้องปรับปรุง',
-      recommendation: lastEntry.pf < 0.7 
-        ? 'ควรปรับปรุงระบบไฟฟ้าเพื่อเพิ่มประสิทธิภาพ' 
-        : 'คุณภาพตัวประกอบกำลังอยู่ในเกณฑ์ดี'
-    },
-    harmonicDistortion: {
-      value: lastEntry.thd || 'N/A',
-      status: lastEntry.thd < 5 ? 'ต่ำ' : 
-              lastEntry.thd < 10 ? 'ปานกลาง' : 'สูง',
-      recommendation: lastEntry.thd > 10 
-        ? 'ตรวจสอบและลดฮาร์โมนิกในระบบ' 
-        : 'ระดับฮาร์โมนิกอยู่ในเกณฑ์ปกติ'
-    },
-    energyEfficiency: {
-      consumptionRate: lastEntry.power,
-      status: lastEntry.power < 1000 ? 'ประหยัด' : 
-              lastEntry.power < 2000 ? 'ปานกลาง' : 'สูง',
-      recommendation: lastEntry.power > 2000 
-        ? 'ควรตรวจสอบการใช้พลังงาน' 
-        : 'การใช้พลังงานมีประสิทธิภาพ'
-    }
-  }
-}
-
-// เพิ่ม computed property สำหรับแสดงผล
-const summaryStatistics = computed(() => {
-  if (!sensorStatistics.value) return []
-
-  const { metrics, anomalies } = sensorStatistics.value
-
-  // ฟังก์ชันช่วยประเมินความเสถียรภาพ
-  const assessStability = (anomalyCount, totalDataPoints) => {
-    const anomalyPercentage = (anomalyCount / totalDataPoints) * 100
-    
-    return {
-      status: anomalyPercentage > 20 ? 'ไม่เสถียร' : 'เสถียร',
-      anomalyRate: anomalyPercentage.toFixed(2) + '%'
-    }
-  }
-
-  // คำนวณจำนวนจุดข้อมูลทั้งหมด (สมมติว่าเป็น 100 จุด)
-  const totalDataPoints = 100
-
-  return [
-    {
-      category: 'แรงดันไฟฟ้า',
-      min: `${metrics.voltage.min.toFixed(2)} V`,
-      max: `${metrics.voltage.max.toFixed(2)} V`,
-      avg: `${metrics.voltage.avg.toFixed(2)} V`,
-      anomalies: anomalies.voltage.outliers.length,
-      stability: assessStability(
-        anomalies.voltage.outliers.length, 
-        totalDataPoints
-      ).status,
-      anomalyRate: assessStability(
-        anomalies.voltage.outliers.length, 
-        totalDataPoints
-      ).anomalyRate
-    },
-    {
-      category: 'กระแสไฟฟ้า',
-      min: `${metrics.current.min.toFixed(2)} A`,
-      max: `${metrics.current.max.toFixed(2)} A`,
-      avg: `${metrics.current.avg.toFixed(2)} A`,
-      anomalies: anomalies.current.outliers.length,
-      stability: assessStability(
-        anomalies.current.outliers.length, 
-        totalDataPoints
-      ).status,
-      anomalyRate: assessStability(
-        anomalies.current.outliers.length, 
-        totalDataPoints
-      ).anomalyRate
-    },
-    {
-      category: 'กำลังไฟฟ้า',
-      min: `${metrics.power.min.toFixed(2)} W`,
-      max: `${metrics.power.max.toFixed(2)} W`,
-      avg: `${metrics.power.avg.toFixed(2)} W`,
-      anomalies: anomalies.power.outliers.length,
-      stability: assessStability(
-        anomalies.power.outliers.length, 
-        totalDataPoints
-      ).status,
-      anomalyRate: assessStability(
-        anomalies.power.outliers.length, 
-        totalDataPoints
-      ).anomalyRate
-    },
-    {
-      category: 'พลังงาน',
-      min: `${metrics.energy.min.toFixed(2)} kWh`,
-      max: `${metrics.energy.max.toFixed(2)} kWh`,
-      avg: `${metrics.energy.avg.toFixed(2)} kWh`,
-      anomalies: anomalies.energy.outliers.length,
-      stability: assessStability(
-        anomalies.energy.outliers.length, 
-        totalDataPoints
-      ).status,
-      anomalyRate: assessStability(
-        anomalies.energy.outliers.length, 
-        totalDataPoints
-      ).anomalyRate
-    },
-    {
-      category: 'ความถี่',
-      min: `${metrics.frequency.min.toFixed(2)} Hz`,
-      max: `${metrics.frequency.max.toFixed(2)} Hz`,
-      avg: `${metrics.frequency.avg.toFixed(2)} Hz`,
-      anomalies: anomalies.frequency.outliers.length,
-      stability: assessStability(
-        anomalies.frequency.outliers.length, 
-        totalDataPoints
-      ).status,
-      anomalyRate: assessStability(
-        anomalies.frequency.outliers.length, 
-        totalDataPoints
-      ).anomalyRate
-    },
-    {
-      category: 'ตัวประกอบกำลัง',
-      min: `${metrics.pf.min.toFixed(2)}`,
-      max: `${metrics.pf.max.toFixed(2)}`,
-      avg: `${metrics.pf.avg.toFixed(2)}`,
-      anomalies: anomalies.pf.outliers.length,
-      stability: assessStability(
-        anomalies.pf.outliers.length, 
-        totalDataPoints
-      ).status,
-      anomalyRate: assessStability(
-        anomalies.pf.outliers.length, 
-        totalDataPoints
-      ).anomalyRate
-    }
-  ]
-})
+initializeDateRange();
+fetchData();
 </script>
 
-<style scoped>
-.animate-pulse {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+<style>
+.form-control input {
+  width: 250px;
 }
 
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
+@media (max-width: 640px) {
+  .form-control input {
+    width: 100%;
   }
 }
 </style>
