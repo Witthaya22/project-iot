@@ -1,13 +1,12 @@
 const express = require('express');
 const cors = require('cors');
 const mqtt = require('mqtt');
-const knex = require('./config');  // Make sure knex.js is correctly configured
+const knex = require('./config');
 const router = require('./router');
 
 const app = express();
 app.use(cors());
-app.use(router)
-
+app.use(router);
 
 const mqttClient = mqtt.connect('mqtt://202.29.230.252');
 
@@ -19,6 +18,8 @@ let latestData = {
   frequency: 0,
   pf: 0
 };
+
+let lastSaveTime = null;
 
 mqttClient.on('connect', () => {
   console.log('Connected to MQTT broker');
@@ -39,17 +40,29 @@ mqttClient.on('message', (topic, message) => {
   latestData[key] = parseFloat(message.toString());
   console.log(`Received: ${topic} = ${message.toString()}`);
 
-  // Insert the latest data into the database
-  knex('sensor_data').insert({
-    voltage: latestData.voltage,
-    current: latestData.current,
-    power: latestData.power,
-    energy: latestData.energy,
-    frequency: latestData.frequency,
-    pf: latestData.pf
-  })
-  .then(() => console.log('Data saved to database'))
-  .catch(err => console.error('Failed to save data:', err));
+  const currentTime = new Date();
+  const currentMinute = Math.floor(currentTime.getTime() / 60000);
+  const lastSaveMinute = lastSaveTime ? Math.floor(lastSaveTime.getTime() / 60000) : null;
+
+  // บันทึกข้อมูลถ้าเป็นนาทีใหม่หรือยังไม่เคยบันทึก
+  if (!lastSaveTime || currentMinute > lastSaveMinute) {
+    knex('sensor_data').insert({
+      voltage: latestData.voltage,
+      current: latestData.current,
+      power: latestData.power,
+      energy: latestData.energy,
+      frequency: latestData.frequency,
+      pf: latestData.pf,
+      timestamp: currentTime
+    })
+    .then(() => {
+      console.log('Data saved to database at:', currentTime);
+      lastSaveTime = currentTime;
+    })
+    .catch(err => console.error('Failed to save data:', err));
+  } else {
+    console.log('Skipping save - same minute as last save');
+  }
 });
 
 app.get('/api/sensor-data', (req, res) => {
