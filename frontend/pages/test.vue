@@ -1,3 +1,234 @@
+<script setup lang="ts">
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+} from "chart.js";
+import { Line } from "vue-chartjs";
+import { format, startOfDay, startOfMonth, endOfMonth, addDays } from "date-fns";
+import { th } from "date-fns/locale";
+import { toZonedTime } from "date-fns-tz";
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
+
+// Constants for pricing
+const PEAK_RATE = 5.7982;
+const OFF_PEAK_RATE = 2.6369;
+const FT_RATE = 0.5;
+const SERVICE_CHARGE = 38.22;
+
+// Data interfaces
+interface SensorData {
+  timestamp: string;
+  power: number;
+  energy?: number;
+}
+
+// State management
+const startDate = ref("");
+const endDate = ref("");
+const isLoading = ref(false);
+const selectedPeriod = ref("1D");
+const sensorData = ref<SensorData[]>([]);
+const allMonthData = ref<SensorData[]>([]);
+
+// Computed: Calculate average power
+const averagePower = computed(() => {
+  if (sensorData.value.length === 0) return 0;
+  return (
+    sensorData.value.reduce((sum, reading) => sum + reading.power, 0) /
+    sensorData.value.length
+  );
+});
+
+// Computed: Calculate energy usage (kWh) based on average power
+const periodKwh = computed(() => {
+  const avgPower = averagePower.value;
+  const start = new Date(startDate.value);
+  const end = new Date(endDate.value);
+  const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60); // Total hours
+  return (avgPower * hours) / 1000; // Convert to kWh
+});
+
+// Computed: Calculate electricity cost based on periodKwh
+const periodCost = computed(() => {
+  const kwh = periodKwh.value;
+  const peakKwh = kwh * 0.7;
+  const offPeakKwh = kwh * 0.3;
+  return peakKwh * PEAK_RATE + offPeakKwh * OFF_PEAK_RATE + kwh * FT_RATE;
+});
+
+// Monthly details
+const currentMonthLabel = computed(() => {
+  if (!sensorData.value.length) return "";
+  const date = new Date(sensorData.value[0].timestamp);
+  return `เดือน${format(date, "MMMM yyyy", { locale: th })}`;
+});
+
+// Monthly electricity cost calculation
+const currentMonthCost = computed(() => {
+  if (!allMonthData.value.length) return 0;
+  const totalEnergy = allMonthData.value.reduce((sum, reading) => sum + (reading.energy || 0), 0);
+  const monthKwh = totalEnergy / 1000;
+  const peakKwh = monthKwh * 0.7;
+  const offPeakKwh = monthKwh * 0.3;
+  return peakKwh * PEAK_RATE + offPeakKwh * OFF_PEAK_RATE + monthKwh * FT_RATE + SERVICE_CHARGE;
+});
+
+// Formatting for last updated time
+const lastUpdated = computed(() => {
+  if (!sensorData.value.length) return "ไม่มีข้อมูล";
+  const date = toZonedTime(
+    new Date(sensorData.value[sensorData.value.length - 1].timestamp),
+    "Asia/Bangkok"
+  );
+  return format(date, "d MMMM yyyy HH:mm:ss", { locale: th });
+});
+
+// Chart data configuration
+const chartData = computed(() => ({
+  labels: sensorData.value.map((d) => {
+    const date = toZonedTime(new Date(d.timestamp), "Asia/Bangkok");
+    return format(date, "d MMM HH:mm"); // Adds date to each label
+  }),
+  datasets: [
+    {
+      label: "กำลังไฟฟ้า",
+      data: sensorData.value.map((d) => d.power),
+      borderColor: "rgb(37, 99, 235)",
+      backgroundColor: "rgba(37, 99, 235, 0.1)",
+      fill: true,
+      tension: 0.4,
+    },
+  ],
+}));
+
+// Chart options
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  interaction: {
+    intersect: false,
+    mode: "nearest",
+  },
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      backgroundColor: "rgba(255, 255, 255, 0.98)",
+      titleColor: "#1e293b",
+      bodyColor: "#1e293b",
+      borderColor: "#e2e8f0",
+      borderWidth: 1,
+      padding: 12,
+      displayColors: false,
+    },
+  },
+  scales: {
+    x: {
+      grid: { display: false },
+      ticks: { maxRotation: 45, minRotation: 45, color: "#64748b", maxTicksLimit: 12 },
+    },
+    y: {
+      beginAtZero: true,
+      grid: { color: "rgba(0, 0, 0, 0.06)", lineWidth: 1 },
+      ticks: { color: "#64748b", callback: (value: number) => `${value}W`, maxTicksLimit: 8 },
+    },
+  },
+  animations: { tension: { duration: 1000, easing: "linear", from: 0.8, to: 0.4 } },
+};
+
+// Set date range for quick period selection
+const setQuickPeriod = (period: any) => {
+  selectedPeriod.value = period;
+  const now = new Date();
+  let start, end;
+  switch (period) {
+    case "1D":
+      start = startOfDay(now);
+      end = addDays(start, 1);
+      break;
+    case "1W":
+      start = addDays(now, -6);
+      end = now;
+      break;
+    case "1M":
+      start = startOfMonth(now);
+      end = endOfMonth(now);
+      break;
+    default:
+      return;
+  }
+  startDate.value = start.toISOString().slice(0, 16);
+  endDate.value = end.toISOString().slice(0, 16);
+  fetchData();
+};
+
+// Fetch data based on selected dates
+const fetchData = async () => {
+  if (!startDate.value || !endDate.value) {
+    alert("กรุณาระบุช่วงเวลาที่ต้องการ");
+    return;
+  }
+  isLoading.value = true;
+
+  try {
+    const response = await fetch(
+      `http://localhost:4000/get-sensor-history?start=${startDate.value}&end=${endDate.value}`
+    );
+
+    if (!response.ok) {
+      throw new Error("ไม่สามารถดึงข้อมูลได้");
+    }
+
+    const data = await response.json();
+    if (Array.isArray(data) && data.every((item) => "timestamp" in item && "power" in item)) {
+      sensorData.value = data;
+
+      // Get monthly data to calculate current month cost
+      const monthStart = startOfMonth(new Date(startDate.value));
+      const monthEnd = endOfMonth(new Date(endDate.value));
+      const monthResponse = await fetch(
+        `http://localhost:4000/get-sensor-history?start=${monthStart.toISOString()}&end=${monthEnd.toISOString()}`
+      );
+
+      if (monthResponse.ok) {
+        allMonthData.value = await monthResponse.json();
+      }
+    } else {
+      throw new Error("ข้อมูลไม่ถูกต้อง");
+    }
+  } catch (error) {
+    console.error("Error:", error);
+    alert("เกิดข้อผิดพลาดในการดึงข้อมูล");
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+// Initialize with a 1-day view
+onMounted(() => {
+  setQuickPeriod("1D");
+});
+</script>
+
+
+
+
 <template>
   <div class="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
@@ -40,9 +271,9 @@
             {{ isLoading ? 'กำลังโหลด...' : 'อัปเดตข้อมูล' }}
           </button>
         </div>
-        <div class="flex justify-center mt-4 gap-2">
+        <!-- <div class="flex justify-center mt-4 gap-2">
           <button 
-            v-for="period in ['1H', '6H', '1D', '1W', '1M']" 
+            v-for="period in ['1D', '1W', '1M']" 
             :key="period"
             @click="setQuickPeriod(period)"
             class="px-4 py-1 rounded-lg text-sm"
@@ -53,12 +284,12 @@
           >
             {{ period }}
           </button>
-        </div>
+        </div> -->
       </div>
 
       <!-- Stats Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div class="stat bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 mb-8">
+        <!-- <div class="stat bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6">
           <div class="flex justify-between items-start mb-4">
             <div class="text-gray-600 text-sm">กำลังไฟฟ้าเฉลี่ย</div>
             <div class="text-green-600">
@@ -69,7 +300,7 @@
           </div>
           <div class="text-2xl font-bold text-gray-900">{{ averagePower.toFixed(1) }} W</div>
           <div class="text-sm text-gray-500">ค่าเฉลี่ยในช่วงเวลา</div>
-        </div>
+        </div> -->
         
         <div class="stat bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6">
           <div class="flex justify-between items-start mb-4">
@@ -84,7 +315,6 @@
           <div class="text-sm text-gray-500">ค่าไฟฟ้า: ฿{{ periodCost.toFixed(2) }}</div>
         </div>
         
-        
         <div class="stat bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6">
           <div class="flex justify-between items-start mb-4">
             <div class="text-gray-600 text-sm">ค่าไฟฟ้าประมาณการรายเดือน</div>
@@ -98,7 +328,7 @@
           <div class="text-sm text-gray-500">{{ currentMonthLabel }}</div>
         </div>
 
-        <div class="stat bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6">
+        <!-- <div class="stat bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-6">
           <div class="flex justify-between items-start mb-4">
             <div class="text-gray-600 text-sm">อัปเดตล่าสุด</div>
             <div class="text-orange-600">
@@ -109,7 +339,7 @@
           </div>
           <div class="text-lg font-semibold text-gray-900">{{ lastUpdated }}</div>
           <div class="text-sm text-gray-500">เวลาล่าสุดที่บันทึก</div>
-        </div>
+        </div> -->
       </div>
 
       <!-- Power Consumption Graph -->
@@ -131,375 +361,12 @@
           </div>
         </div>
       </div>
-
-      <!-- Monthly Usage Table -->
-      <div class="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg overflow-hidden">
-        <div class="p-6">
-          <h2 class="text-xl font-bold text-gray-800 mb-4">สรุปการใช้พลังงานรายเดือน</h2>
-          <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เดือน</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">การใช้พลังงาน (kWh)</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ค่าไฟฟ้าประมาณการ (บาท)</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">กำลังไฟฟ้าเฉลี่ย (W)</th>
-                </tr>
-              </thead>
-              <tbody class="bg-white divide-y divide-gray-200">
-                <tr v-for="(month, index) in monthlyUsage" :key="index">
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ month.month }}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ month.kwh.toFixed(2) }}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ month.cost.toFixed(2) }}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ month.avgPower.toFixed(1) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 </template>
 
-<script setup lang="ts">
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-} from 'chart.js';
-import { Line } from 'vue-chartjs';
-import { format, subHours, subDays, subMonths, startOfMonth, endOfMonth } from 'date-fns';
-import { th } from 'date-fns/locale';
 
-// Register ChartJS components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-);
 
-// Constants for electricity rates
-const PEAK_RATE = 5.7982; // บาท/หน่วย (09:00-22:00)
-const OFF_PEAK_RATE = 2.6369; // บาท/หน่วย (22:00-09:00)
-const FT_RATE = 0.5; // ค่า Ft
-const SERVICE_CHARGE = 38.22; // ค่าบริการรายเดือน
-
-// Interface for sensor data
-interface SensorData {
-  timestamp: string;
-  power: number;
-  voltage?: number;
-  current?: number;
-  energy?: number;
-  frequency?: number;
-  pf?: number;
-}
-
-// State management
-const startDate = ref('');
-const endDate = ref('');
-const isLoading = ref(false);
-const selectedPeriod = ref('1D');
-const sensorData = ref<SensorData[]>([]);
-const allMonthData = ref<SensorData[]>([]);
-
-// Computed properties for the selected period
-const periodKwh = computed(() => {
-  if (!sensorData.value.length) return 0;
-  
-  const totalEnergy = sensorData.value.reduce((sum, reading) => sum + (reading.energy || 0), 0);
-  
-  if (totalEnergy > 0) {
-    return totalEnergy / 1000; // Convert Wh to kWh
-  }
-  
-  const firstTimestamp = new Date(sensorData.value[0].timestamp);
-  const lastTimestamp = new Date(sensorData.value[sensorData.value.length - 1].timestamp);
-  const hours = (lastTimestamp.getTime() - firstTimestamp.getTime()) / (1000 * 60 * 60);
-  const avgPower = sensorData.value.reduce((sum, reading) => sum + reading.power, 0) / sensorData.value.length;
-  return (avgPower * hours) / 1000;
-});
-
-const periodCost = computed(() => {
-  const kwh = periodKwh.value;
-  if (kwh === 0) return 0;
-  
-  const peakKwh = kwh * 0.7;
-  const offPeakKwh = kwh * 0.3;
-  
-  return (peakKwh * PEAK_RATE + offPeakKwh * OFF_PEAK_RATE) + (kwh * FT_RATE);
-});
-
-const averagePower = computed(() => {
-  if (!sensorData.value.length) return 0;
-  return sensorData.value.reduce((sum, reading) => sum + reading.power, 0) / sensorData.value.length;
-});
-
-// Current month calculations
-const currentMonthLabel = computed(() => {
-  if (!sensorData.value.length) return '';
-  const date = new Date(sensorData.value[0].timestamp);
-  return `เดือน${format(date, 'MMMM yyyy', { locale: th })}`;
-});
-
-const currentMonthCost = computed(() => {
-  if (!allMonthData.value.length) return 0;
-  
-  const currentDate = new Date(sensorData.value[0].timestamp);
-  const monthStart = startOfMonth(currentDate);
-  const monthEnd = endOfMonth(currentDate);
-  
-  const monthData = allMonthData.value.filter(reading => {
-    const readingDate = new Date(reading.timestamp);
-    return readingDate >= monthStart && readingDate <= monthEnd;
-  });
-  
-  if (!monthData.length) return 0;
-  
-  // Calculate total energy for the month
-  const totalEnergy = monthData.reduce((sum, reading) => sum + (reading.energy || 0), 0);
-  const monthKwh = totalEnergy / 1000;
-  
-  // Calculate costs
-  const peakKwh = monthKwh * 0.7;
-  const offPeakKwh = monthKwh * 0.3;
-  
-  return (peakKwh * PEAK_RATE + offPeakKwh * OFF_PEAK_RATE) + 
-         (monthKwh * FT_RATE) + SERVICE_CHARGE;
-});
-
-const lastUpdated = computed(() => {
-  if (!sensorData.value.length) return 'ไม่มีข้อมูล';
-  return format(
-    new Date(sensorData.value[sensorData.value.length - 1].timestamp),
-    "d MMMM yyyy HH:mm:ss",
-    { locale: th }
-  );
-});
-
-const monthlyUsage = computed(() => {
-  if (!allMonthData.value.length) return [];
-
-  const monthlyData: Record<string, any> = {};
-
-  // Group data by month
-  allMonthData.value.forEach((reading) => {
-    const date = new Date(reading.timestamp);
-    const monthKey = format(date, 'yyyy-MM');
-    const monthDisplay = format(date, 'MMMM yyyy', { locale: th });
-
-    if (!monthlyData[monthKey]) {
-      monthlyData[monthKey] = {
-        month: monthDisplay,
-        readings: [],
-        totalPower: 0,
-        totalEnergy: 0,
-        firstTimestamp: date,
-        lastTimestamp: date
-      };
-    }
-
-    monthlyData[monthKey].readings.push(reading);
-    monthlyData[monthKey].totalPower += reading.power;
-    monthlyData[monthKey].totalEnergy += reading.energy || 0;
-    monthlyData[monthKey].lastTimestamp = date;
-  });
-
-  return Object.entries(monthlyData).map(([key, month]) => {
-    const avgPower = month.totalPower / month.readings.length;
-    const kwh = month.totalEnergy / 1000;
-    
-    const peakKwh = kwh * 0.7;
-    const offPeakKwh = kwh * 0.3;
-    
-    const cost = (peakKwh * PEAK_RATE + offPeakKwh * OFF_PEAK_RATE) + 
-                 (kwh * FT_RATE) + SERVICE_CHARGE;
-
-    return {
-      month: month.month,
-      kwh,
-      cost,
-      avgPower
-    };
-  }).sort((a, b) => new Date(b.month).getTime() - new Date(a.month).getTime());
-});
-
-const chartData = computed(() => ({
-  labels: sensorData.value.map(d => format(new Date(d.timestamp), 'HH:mm')),
-  datasets: [{
-    label: 'กำลังไฟฟ้า',
-    data: sensorData.value.map(d => d.power),
-    borderColor: 'rgb(37, 99, 235)',
-    backgroundColor: 'rgba(37, 99, 235, 0.1)',
-    fill: true,
-    tension: 0.4
-  }]
-}));
-
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  interaction: {
-    intersect: false,
-    mode: 'nearest' as const
-  },
-  plugins: {
-    legend: {
-      display: false
-    },
-    tooltip: {
-      backgroundColor: 'rgba(255, 255, 255, 0.98)',
-      titleColor: '#1e293b',
-      bodyColor: '#1e293b',
-      borderColor: '#e2e8f0',
-      borderWidth: 1,
-      padding: 12,
-      displayColors: false,
-      titleFont: {
-        size: 14,
-        weight: 800
-      },
-      bodyFont: {
-        size: 13
-      },
-      callbacks: {
-        title: (context: any) => {
-          const date = new Date(sensorData.value[context[0].dataIndex].timestamp);
-          return format(date, "EEEE d MMMM yyyy HH:mm:ss", { locale: th });
-        },
-        label: (context: any) => {
-          const reading = sensorData.value[context.dataIndex];
-          return [
-            `กำลังไฟฟ้า: ${reading.power.toFixed(1)} วัตต์`,
-            `แรงดัน: ${reading?.voltage?.toFixed(1)} V`,
-            `กระแส: ${reading?.current?.toFixed(2)} A`,
-            `ตัวประกอบกำลัง: ${reading.pf}`
-          ];
-        }
-      }
-    }
-  },
-  scales: {
-    x: {
-      grid: {
-        display: false
-      },
-      ticks: {
-        maxRotation: 45,
-        minRotation: 45
-      }
-    },
-    y: {
-      beginAtZero: true,
-      grid: {
-        color: 'rgba(0, 0, 0, 0.06)',
-        lineWidth: 1
-      },
-      ticks: {
-        callback: (value: number) => `${value}W`
-      }
-    }
-  }
-};
-
-// Methods
-const setQuickPeriod = (period: string) => {
-  selectedPeriod.value = period;
-  const end = new Date();
-  let start: Date;
-
-  switch (period) {
-    case '1H':
-      start = subHours(end, 1);
-      break;
-    case '6H':
-      start = subHours(end, 6);
-      break;
-    case '1D':
-      start = subDays(end, 1);
-      break;
-    case '1W':
-      start = subDays(end, 7);
-      break;
-    case '1M':
-      start = subMonths(end, 1);
-      break;
-    default:
-      start = subDays(end, 1);
-  }
-
-  startDate.value = start.toISOString().slice(0, 16);
-  endDate.value = end.toISOString().slice(0, 16);
-  fetchData();
-};
-
-const fetchData = async () => {
-  if (!startDate.value || !endDate.value) {
-    alert('กรุณาระบุช่วงเวลาที่ต้องการ');
-    return;
-  }
-
-  isLoading.value = true;
-
-  try {
-    // Fetch data for the selected period
-    const response = await fetch(
-      `http://localhost:4000/get-sensor-history?start=${startDate.value}&end=${endDate.value}`
-    );
-
-    if (!response.ok) {
-      throw new Error('ไม่สามารถดึงข้อมูลได้');
-    }
-
-    const data = await response.json();
-    if (Array.isArray(data) && data.every(item => 'timestamp' in item && 'power' in item)) {
-      sensorData.value = data;
-      
-      // Fetch all data for the current month
-      const currentDate = new Date(data[0].timestamp);
-      const monthStart = startOfMonth(currentDate);
-      const monthEnd = endOfMonth(currentDate);
-      
-      const monthResponse = await fetch(
-        `http://localhost:4000/get-sensor-history?start=${monthStart.toISOString()}&end=${monthEnd.toISOString()}`
-      );
-      
-      if (monthResponse.ok) {
-        const monthData = await monthResponse.json();
-        allMonthData.value = monthData;
-      }
-    } else {
-      throw new Error('ข้อมูลไม่ถูกต้อง');
-    }
-  } catch (error) {
-    console.error('Error:', error);
-    alert('เกิดข้อผิดพลาดในการดึงข้อมูล');
-  } finally {
-    isLoading.value = false;
-  }
-};
-
-// Initialize with last 24 hours
-onMounted(() => {
-  const end = new Date();
-  const start = subDays(end, 1);
-  startDate.value = start.toISOString().slice(0, 16);
-  endDate.value = end.toISOString().slice(0, 16);
-  fetchData();
-});
-</script>
 
 <style>
 .form-control input {

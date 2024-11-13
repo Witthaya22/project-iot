@@ -1,0 +1,137 @@
+<template>
+    <div class="min-h-screen bg-gray-100 p-8">
+      <h2 class="text-center text-3xl font-semibold text-red-600 mb-4">หน้าแสดงข้อมูลจาก Sensor</h2>
+  
+      <!-- Live Sensor Data Card -->
+      <div class="bg-white rounded-xl shadow-lg p-6 mb-8 max-w-3xl mx-auto">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="text-center text-xl font-bold text-gray-700">ข้อมูลจากเซนเซอร์</h3>
+          <!-- Bright Red Live Indicator in Thai -->
+          <button class="px-4 py-1 bg-red-600 text-white rounded-full font-semibold uppercase animate-pulse">สด</button>
+        </div>
+        <div class="grid grid-cols-3 gap-4 text-center">
+          <div>
+            <p class="text-blue-600 font-medium">แรงดันไฟฟ้า (Voltage)</p>
+            <p class="text-xl font-bold">{{ liveData.voltage }} V</p>
+          </div>
+          <div>
+            <p class="text-blue-600 font-medium">กระแสไฟฟ้า (Current)</p>
+            <p class="text-xl font-bold">{{ liveData.current }} A</p>
+          </div>
+          <div>
+            <p class="text-blue-600 font-medium">กำลังไฟฟ้า (Power)</p>
+            <p class="text-xl font-bold">{{ liveData.power }} W</p>
+          </div>
+          <div>
+            <p class="text-blue-600 font-medium">พลังงานสะสม (Energy)</p>
+            <p class="text-xl font-bold">{{ liveData.energy }} kWh</p>
+          </div>
+          <div>
+            <p class="text-blue-600 font-medium">ความถี่ (Frequency)</p>
+            <p class="text-xl font-bold">{{ liveData.frequency }} Hz</p>
+          </div>
+          <div>
+            <p class="text-blue-600 font-medium">ตัวประกอบกำลัง (Power Factor)</p>
+            <p class="text-xl font-bold">{{ liveData.pf }}</p>
+          </div>
+        </div>
+      </div>
+  
+      <!-- Historical Sensor Data Table -->
+      <div class="bg-white rounded-xl shadow-lg p-6 max-w-4xl mx-auto">
+        <h3 class="text-center text-xl font-bold text-gray-950 mb-6">ข้อมูลประวัติการวัด (10 รายการล่าสุด)</h3>
+        <table class="table w-full table-zebra">
+          <thead>
+            <tr class="bg-gray-200 font-semibold text-gray-950 mb-6"">
+              <th class="text-left px-4 py-2">เวลาที่บันทึก</th>
+              <th class="text-left px-4 py-2">แรงดันไฟฟ้า (V)</th>
+              <th class="text-left px-4 py-2">กระแสไฟฟ้า (A)</th>
+              <th class="text-left px-4 py-2">กำลังไฟฟ้า (W)</th>
+              <th class="text-left px-4 py-2">พลังงานสะสม (kWh)</th>
+              <th class="text-left px-4 py-2">ความถี่ (Hz)</th>
+              <th class="text-left px-4 py-2">ตัวประกอบกำลัง</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="record in historicalData.slice(-10)" :key="record.timestamp">
+              <td class="px-4 py-2">{{ formatTimestamp(record.timestamp) }}</td>
+              <td class="px-4 py-2">{{ record.voltage }} V</td>
+              <td class="px-4 py-2">{{ record.current }} A</td>
+              <td class="px-4 py-2">{{ record.power }} W</td>
+              <td class="px-4 py-2">{{ record.energy }} kWh</td>
+              <td class="px-4 py-2">{{ record.frequency }} Hz</td>
+              <td class="px-4 py-2">{{ record.pf }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </template>
+  
+  <script setup lang="ts">
+  import { ref, onMounted } from 'vue';
+  import { format } from 'date-fns';
+  import { th } from 'date-fns/locale';
+  
+  const liveData = ref({
+    voltage: 0,
+    current: 0,
+    power: 0,
+    energy: 0,
+    frequency: 0,
+    pf: 0,
+  });
+  
+  const historicalData = ref([]);
+  
+  // Format timestamp to Thai time and format
+  const formatTimestamp = (timestamp) => {
+    return format(new Date(timestamp), "dd MMM yyyy HH:mm:ss", { locale: th });
+  };
+  
+  // Fetch the latest live data
+  const fetchLiveData = async () => {
+    try {
+      const response = await fetch('http://localhost:4000/get-latest-sensor-data');
+      liveData.value = await response.json();
+    } catch (error) {
+      console.error("Error fetching live data:", error);
+    }
+  };
+  
+  // Fetch historical data
+  const fetchHistoricalData = async () => {
+    try {
+      const response = await fetch('http://localhost:4000/get-sensor-history?limit=10');
+      historicalData.value = await response.json();
+    } catch (error) {
+      console.error("Error fetching historical data:", error);
+    }
+  };
+  
+  // Fetch live data and historical data together
+  const fetchAllData = async () => {
+    await fetchLiveData();
+    await fetchHistoricalData();
+  };
+  
+  // Fetch data on mount and set up periodic updates for live data
+  onMounted(() => {
+    fetchAllData(); // Fetch both live data and historical data when mounted
+  
+    // Update both live data and historical data every second
+    setInterval(fetchAllData, 1000);
+  });
+  </script>
+  
+  <style>
+  /* Tailwind CSS and DaisyUI are being used */
+  .table-zebra tbody tr:nth-child(odd) {
+    @apply bg-gray-50;
+  }
+  
+  .table-zebra tbody tr:nth-child(even) {
+    @apply bg-white;
+  }
+  </style>
+  

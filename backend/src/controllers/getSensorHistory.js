@@ -1,41 +1,68 @@
-const db = require('../config')
+const db = require("../config");
 
-const getHistoricalData = async (req, res) => {
-  const { start, end } = req.query
-  
-  // Validate input
-  if (!start || !end) {
-    return res.status(400).json({ 
-      error: 'Start and end dates are required' 
-    })
-  }
-
+const getLatestSensorData = async (req, res) => {
   try {
-    const data = await db('sensor_data')
-      .whereBetween('timestamp', [start, end])
-      .orderBy('timestamp', 'asc')
-      .limit(1000) // Limit data to prevent overloading
+    const [data] = await db("sensor_data")
+      .orderBy("timestamp", "desc")
+      .limit(1);
 
-    // Comprehensive CORS handling
-    res.header('Access-Control-Allow-Origin', '*') // Or specific origin
-    res.header('Access-Control-Allow-Methods', 'GET, OPTIONS')
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-    
-    // Check if data exists
-    if (data.length === 0) {
-      return res.status(404).json({ 
-        message: 'No data found for the specified time range' 
-      })
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+    if (!data) {
+      return res.status(404).json({ message: "No data found" });
     }
 
-    res.json(data)
+    res.json(data);
   } catch (error) {
-    console.error('Error fetching historical data:', error)
-    res.status(500).json({ 
-      error: 'Internal server error', 
-      details: process.env.NODE_ENV === 'development' ? error.message : null 
-    })
+    console.error("Error fetching latest sensor data:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
-}
+};
 
-module.exports = getHistoricalData
+const getHistoricalData = async (req, res) => {
+  const { limit = 1000, start, end } = req.query; // เพิ่ม default limit เพื่อให้ดึงข้อมูลได้เพียงพอ
+
+  try {
+    // Prepare query
+    let query = db("sensor_data").orderBy("timestamp", "desc");
+
+    // ใช้ช่วงเวลา start และ end กรองข้อมูล
+    if (start && end) {
+      query = query.whereBetween("timestamp", [new Date(start), new Date(end)]);
+    }
+
+    // ตรวจสอบ limit
+    if (limit) {
+      query = query.limit(Number(limit));
+    }
+
+    // ดึงข้อมูลจากฐานข้อมูล
+    const data = await query;
+
+    // ตั้งค่าการอนุญาตสำหรับการเข้าถึงจากโดเมนต่าง ๆ
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+    // ตรวจสอบว่ามีข้อมูลหรือไม่
+    if (data.length === 0) {
+      return res.status(404).json({ message: "No data found" });
+    }
+
+    // ส่งข้อมูลทั้งหมดกลับไป โดยไม่กรองข้อมูลที่ energy เป็น 0
+    res.json(data);
+  } catch (error) {
+    console.error("Error fetching historical data:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+
+
+
+module.exports = {
+  getLatestSensorData,
+  getHistoricalData,
+};
