@@ -46,7 +46,7 @@ mqttClient.on('message', (topic, message) => {
 
   // บันทึกข้อมูลถ้าเป็นนาทีใหม่หรือยังไม่เคยบันทึก
   if (!lastSaveTime || currentMinute > lastSaveMinute) {
-    knex('sensor_data').insert({
+    knex('sensor_readings').insert({
       voltage: latestData.voltage,
       current: latestData.current,
       power: latestData.power,
@@ -56,10 +56,10 @@ mqttClient.on('message', (topic, message) => {
       timestamp: currentTime
     })
     .then(() => {
-      console.log('Data saved to database at:', currentTime);
+      console.log('Data saved to sensor_readings table at:', currentTime);
       lastSaveTime = currentTime;
     })
-    .catch(err => console.error('Failed to save data:', err));
+    .catch(err => console.error('Failed to save data to sensor_readings table:', err));
   } else {
     console.log('Skipping save - same minute as last save');
   }

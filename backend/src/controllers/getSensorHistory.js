@@ -2,7 +2,7 @@ const db = require("../config");
 
 const getLatestSensorData = async (req, res) => {
   try {
-    const [data] = await db("sensor_data")
+    const [data] = await db("sensor_readings") // เปลี่ยนเป็น sensor_readings
       .orderBy("timestamp", "desc")
       .limit(1);
 
@@ -26,7 +26,7 @@ const getHistoricalData = async (req, res) => {
 
   try {
     // Prepare query
-    let query = db("sensor_data").orderBy("timestamp", "desc");
+    let query = db("sensor_readings").orderBy("timestamp", "desc"); // เปลี่ยนเป็น sensor_readings
 
     // ใช้ช่วงเวลา start และ end กรองข้อมูล
     if (start && end) {
@@ -58,9 +58,6 @@ const getHistoricalData = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
-
-
-
 
 module.exports = {
   getLatestSensorData,
