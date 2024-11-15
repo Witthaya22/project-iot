@@ -35,52 +35,43 @@ const error = ref<string | null>(null);
 const dailyEnergy = computed(() => {
   if (!sensorData.value.length) return 0;
   const totalEnergy = sensorData.value.reduce((sum, reading) => sum + reading.energy, 0);
-  return Number((totalEnergy / 1000).toFixed(3));
+  return Number((totalEnergy / 1000).toFixed(4));
 });
 
 const monthlyEnergy = computed(() => {
   if (!monthlyData.value.length) return 0;
   const totalEnergy = monthlyData.value.reduce((sum, reading) => sum + reading.energy, 0);
-  return Number((totalEnergy / 1000).toFixed(3));
+  return Number((totalEnergy / 1000).toFixed(4));
 });
 
 const dailyCost = computed(() => {
   const energy = dailyEnergy.value;
   if (energy === 0) {
-    // ค่าเดิม
-    // return SERVICE_CHARGE;
-    return Number(SERVICE_CHARGE.toFixed(5));
+    return Number(SERVICE_CHARGE.toFixed(4));
   }
   const peakEnergy = energy * 0.7;
   const offPeakEnergy = energy * 0.3;
   const cost = (peakEnergy * PEAK_RATE) + (offPeakEnergy * OFF_PEAK_RATE) + (energy * FT_RATE);
-  // ค่าเดิม
-  // return Number(cost.toFixed(2));
-  return Number(cost.toFixed(5));
+  return Number(cost.toFixed(4));
 });
 
 const monthlyCost = computed(() => {
   const energy = monthlyEnergy.value;
-  // ค่าเดิม
-  // return energy === 0 ? SERVICE_CHARGE : calculateMonthlyCost(energy);
-  return energy === 0 ? Number(SERVICE_CHARGE.toFixed(5)) : calculateMonthlyCost(energy);
+  return energy === 0 ? Number(SERVICE_CHARGE.toFixed(4)) : calculateMonthlyCost(energy);
 });
 
 function calculateMonthlyCost(energy: number) {
   const peakEnergy = energy * 0.7;
   const offPeakEnergy = energy * 0.3;
   const cost = (peakEnergy * PEAK_RATE) + (offPeakEnergy * OFF_PEAK_RATE) + (energy * FT_RATE) + SERVICE_CHARGE;
-  // ค่าเดิม
-  // return Number(cost.toFixed(2));
-  return Number(cost.toFixed(5));
+  return Number(cost.toFixed(4));
 }
 
 const chartData = computed(() => ({
-  labels: sensorData.value
-    .map(d => {
-      const date = toZonedTime(new Date(d.timestamp), 'Asia/Bangkok');
-      return format(date, 'd MMM yy HH:mm', { locale: th });
-    }),
+  labels: sensorData.value.map(d => {
+    const date = toZonedTime(new Date(d.timestamp), 'Asia/Bangkok');
+    return format(date, 'd MMM yy HH:mm', { locale: th });
+  }),
   datasets: [{
     label: 'กำลังไฟฟ้า (W)',
     data: sensorData.value.map(d => d.power),
@@ -151,7 +142,6 @@ const fetchData = async () => {
     if (!response.ok) throw new Error('ไม่สามารถดึงข้อมูลได้');
     let data = await response.json();
     
-    // จัดเรียงข้อมูลตาม timestamp
     data = data.sort((a: SensorData, b: SensorData) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     sensorData.value = data;
 
@@ -163,7 +153,6 @@ const fetchData = async () => {
 
     if (monthResponse.ok) {
       let monthData = await monthResponse.json();
-      // จัดเรียงข้อมูลตาม timestamp สำหรับข้อมูลรายเดือนด้วย
       monthlyData.value = monthData.sort((a: SensorData, b: SensorData) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     }
   } catch (err) {
@@ -173,7 +162,6 @@ const fetchData = async () => {
   }
 };
 
-
 // Watchers and lifecycle hooks
 watch(selectedDate, () => {
   fetchData();
@@ -181,98 +169,118 @@ watch(selectedDate, () => {
 
 onMounted(() => {
   fetchData();
-  setInterval(fetchData,  30000);
+  setInterval(fetchData,  20000);
 });
 </script>
 
-
 <template>
-  <div class="min-h-screen bg-white p-4 text-gray-900">
-    <div class="max-w-6xl mx-auto">
-      <div class="card bg-white shadow-xl border border-gray-200">
-        <div class="card-body">
-          <h2 class="card-title text-3xl mb-6 text-gray-800">ระบบติดตามการใช้พลังงาน</h2>
+  <div class="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-8">
+    <div class="max-w-7xl mx-auto">
+      <!-- Header Section -->
+      <div class="text-center mb-8">
+        <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-2">
+          ระบบติดตามการใช้พลังงาน
+        </h1>
+        <p class="text-gray-600">ติดตามและวิเคราะห์การใช้พลังงานไฟฟ้าของคุณ</p>
+      </div>
+
+      <!-- Main Card Section -->
+      <div class="bg-white/80 backdrop-blur-md shadow-lg rounded-xl p-6 mb-8">
+        
+        <!-- Date Selection Section -->
+        <div class="flex flex-col md:flex-row items-center justify-center gap-4 mb-8">
+          <label class="text-gray-600 font-semibold">เลือกวันที่:</label>
+          <input
+            type="date"
+            v-model="selectedDate"
+            class="input input-bordered w-full max-w-xs border-gray-300 bg-white/90 rounded-lg focus:ring focus:ring-blue-500"
+          />
+          <button
+            @click="fetchData"
+            class="btn btn-primary bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-all"
+          >
+            อัปเดตข้อมูล
+          </button>
+        </div>
+
+        <!-- Stats Cards Section -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div class="bg-white p-6 rounded-lg shadow-md flex items-center">
+            <div class="mr-4">
+              <!-- Use image from URL for daily energy icon -->
+              <img src="../assets/images/calendar.png" alt="Daily Energy Icon" class="h-12 w-12" />
+            </div>
+            <div>
+              <div class="text-lg font-semibold text-gray-700">การใช้พลังงานในช่วงที่เลือก</div>
+              <div class="text-3xl font-bold text-blue-600">{{ dailyEnergy }} kWh</div>
+              <div class="text-md text-gray-500 mt-2">ค่าไฟฟ้า: {{ dailyCost }} บาท (ต่อวัน)</div>
+            </div>
+          </div>
           
-          <!-- Date Selection -->
-          <div class="form-control w-full max-w-xs mb-8">
-            <label class="label">
-              <span class="label-text text-lg text-gray-600">เลือกวันที่ต้องการดูข้อมูล</span>
-            </label>
-            <input
-              type="date"
-              v-model="selectedDate"
-              class="input input-bordered w-full border-gray-300 bg-white"
-            >
-          </div>
-
-          <!-- Stats Cards -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <div class="stats shadow bg-gray-50">
-              <div class="stat">
-                <div class="stat-title text-gray-600">การใช้พลังงานวันที่เลือก</div>
-                <div class="stat-value text-primary">{{ dailyEnergy }} kWh</div>
-                <div class="stat-desc text-lg text-gray-500">ค่าไฟฟ้าประมาณ {{ dailyCost }} บาท</div>
-              </div>
+          <div class="bg-white p-6 rounded-lg shadow-md flex items-center">
+            <div class="mr-4">
+              <!-- Use image from URL for monthly energy icon -->
+              <img src="../assets/images/month (1).png" alt="Monthly Energy Icon" class="h-12 w-12" />
             </div>
-            
-            <div class="stats shadow bg-gray-50">
-              <div class="stat">
-                <div class="stat-title text-gray-600">ประมาณการณ์ค่าไฟฟ้าเดือนนี้</div>
-                <div class="stat-value text-secondary">{{ monthlyEnergy }} kWh</div>
-                <div class="stat-desc text-lg text-gray-500">ค่าไฟฟ้าประมาณ {{ monthlyCost }} บาท</div>
-              </div>
+            <div>
+              <div class="text-lg font-semibold text-gray-700">ค่าไฟฟ้าประมาณการรายเดือน</div>
+              <div class="text-3xl font-bold text-pink-600">{{ monthlyEnergy }} kWh</div>
+              <div class="text-md text-gray-500 mt-2">ค่าไฟฟ้า: {{ monthlyCost }} บาท (ต่อเดือน)</div>
             </div>
           </div>
+        </div>
 
-          <!-- Chart -->
-          <div class="h-[400px] relative">
-            <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center bg-gray-100 bg-opacity-50 z-10">
-              <span class="loading loading-spinner loading-lg text-primary"></span>
-            </div>
-            
-            <template v-if="!isLoading">
-              <Line
-                v-if="sensorData.length && chartData.labels.length"
-                :data="chartData"
-                :options="chartOptions"
-              />
-              <div
-                v-else
-                class="h-full flex items-center justify-center"
-              >
-                <div class="text-center">
-                  <div class="text-2xl mb-2">ไม่พบข้อมูล</div>
-                  <p class="text-gray-500">กรุณาเลือกวันที่อื่น หรือตรวจสอบการเชื่อมต่อ</p>
-                </div>
+        <!-- Chart Section -->
+        <div class="relative bg-white p-6 rounded-lg shadow-md h-[400px]">
+          <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center bg-gray-100 bg-opacity-50 z-10">
+            <span class="loading loading-spinner loading-lg text-primary"></span>
+          </div>
+          
+          <template v-if="!isLoading">
+            <Line
+              v-if="sensorData.length && chartData.labels.length"
+              :data="chartData"
+              :options="chartOptions"
+            />
+            <div v-else class="h-full flex items-center justify-center">
+              <div class="text-center">
+                <div class="text-2xl mb-2">ไม่พบข้อมูล</div>
+                <p class="text-gray-500">กรุณาเลือกวันที่อื่น หรือตรวจสอบการเชื่อมต่อ</p>
               </div>
-            </template>
-          </div>
+            </div>
+          </template>
+        </div>
 
-                    <!-- Error Alert -->
-                    <div v-if="error" class="alert alert-error mt-6">
-            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>{{ error }}</span>
-          </div>
+        <!-- Error Alert -->
+        <div v-if="error" class="alert alert-error mt-6 bg-red-100 text-red-800 border border-red-400 rounded-lg p-4">
+          <img src="https://example.com/error_icon.png" alt="Error Icon" class="h-6 w-6 mr-2" />
+          <span>{{ error }}</span>
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<style>
-  /* สไตล์เพิ่มเติมเพื่อความสวยงาม */
-  .stats .stat-value.text-primary {
-    color: #3b82f6; /* สีฟ้าอ่อน */
-  }
-  
-  .stats .stat-value.text-secondary {
-    color: #ec4899; /* สีชมพูอ่อน */
-  }
 
-  .alert-error {
-    background-color: #fdecea;
-    color: #d32f2f;
+<style scoped>
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
   }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.btn {
+  @apply font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all;
+}
+
+.btn-primary {
+  @apply bg-blue-600 text-white hover:bg-blue-700;
+}
 </style>
