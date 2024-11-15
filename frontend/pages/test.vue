@@ -12,17 +12,11 @@ interface SensorData {
   timestamp: string;
   voltage: number;
   current: number;
-  power: number;
-  energy: number;
+  power: number; // Power in watts
+  energy: number; // Energy in Wh
   frequency: number;
   pf: number;
 }
-
-// Constants
-const PEAK_RATE = 5.7982;
-const OFF_PEAK_RATE = 2.6369;
-const FT_RATE = 0.5;
-const SERVICE_CHARGE = 38.22;
 
 // State
 const selectedDate = ref(format(new Date(), 'yyyy-MM-dd'));
@@ -31,42 +25,70 @@ const sensorData = ref<SensorData[]>([]);
 const monthlyData = ref<SensorData[]>([]);
 const error = ref<string | null>(null);
 
-// Computed values
+// คำนวณพลังงานรายวันจากกำลังไฟฟ้าทุก 1 นาที
 const dailyEnergy = computed(() => {
   if (!sensorData.value.length) return 0;
-  const totalEnergy = sensorData.value.reduce((sum, reading) => sum + reading.energy, 0);
-  return Number((totalEnergy / 1000).toFixed(4));
+
+  // คำนวณพลังงานในหน่วย Wh จากข้อมูลกำลังไฟฟ้า (กำลัง W * เวลา (1/60 ชั่วโมง))
+  const totalEnergy = sensorData.value.reduce((sum, reading) => sum + (reading.power / 60), 0);
+  return Number((totalEnergy / 1000).toFixed(4)); // แปลงเป็น kWh
 });
 
+// คำนวณพลังงานรายเดือนจากกำลังไฟฟ้าทุก 1 นาที
 const monthlyEnergy = computed(() => {
   if (!monthlyData.value.length) return 0;
-  const totalEnergy = monthlyData.value.reduce((sum, reading) => sum + reading.energy, 0);
-  return Number((totalEnergy / 1000).toFixed(4));
+
+  // คำนวณพลังงานในหน่วย Wh จากข้อมูลกำลังไฟฟ้า (กำลัง W * เวลา (1/60 ชั่วโมง))
+  const totalEnergy = monthlyData.value.reduce((sum, reading) => sum + (reading.power / 60), 0);
+  return Number((totalEnergy / 1000).toFixed(4)); // แปลงเป็น kWh
 });
 
+// คำนวณค่าใช้จ่ายรายวัน (ไม่รวมค่าบริการรายเดือน)
 const dailyCost = computed(() => {
-  const energy = dailyEnergy.value;
-  if (energy === 0) {
-    return Number(SERVICE_CHARGE.toFixed(4));
-  }
-  const peakEnergy = energy * 0.7;
-  const offPeakEnergy = energy * 0.3;
-  const cost = (peakEnergy * PEAK_RATE) + (offPeakEnergy * OFF_PEAK_RATE) + (energy * FT_RATE);
-  return Number(cost.toFixed(4));
+  return calculateDailyCost(dailyEnergy.value);
 });
 
+// คำนวณค่าใช้จ่ายรายเดือน (รวมค่าบริการรายเดือน)
 const monthlyCost = computed(() => {
-  const energy = monthlyEnergy.value;
-  return energy === 0 ? Number(SERVICE_CHARGE.toFixed(4)) : calculateMonthlyCost(energy);
+  return calculateMonthlyCost(monthlyEnergy.value);
 });
 
-function calculateMonthlyCost(energy: number) {
-  const peakEnergy = energy * 0.7;
-  const offPeakEnergy = energy * 0.3;
-  const cost = (peakEnergy * PEAK_RATE) + (offPeakEnergy * OFF_PEAK_RATE) + (energy * FT_RATE) + SERVICE_CHARGE;
+// ฟังก์ชันคำนวณค่าไฟฟ้าจากพลังงานที่ใช้ (หน่วย kWh) สำหรับรายวัน
+function calculateDailyCost(energy: number) {
+  if (energy === 0) return 0;
+
+  let cost = 0;
+
+  if (energy <= 150) {
+    cost = energy * 3.2484;
+  } else if (energy <= 400) {
+    cost = (150 * 3.2484) + ((energy - 150) * 4.2218);
+  } else {
+    cost = (150 * 3.2484) + (250 * 4.2218) + ((energy - 400) * 4.4217);
+  }
+
   return Number(cost.toFixed(4));
 }
 
+// ฟังก์ชันคำนวณค่าไฟฟ้ารายเดือน (รวมค่าบริการ)
+function calculateMonthlyCost(energy: number) {
+  if (energy === 0) return 38.22; // รวมค่าบริการขั้นต่ำ
+
+  let cost = 0;
+
+  if (energy <= 150) {
+    cost = energy * 3.2484;
+  } else if (energy <= 400) {
+    cost = (150 * 3.2484) + ((energy - 150) * 4.2218);
+  } else {
+    cost = (150 * 3.2484) + (250 * 4.2218) + ((energy - 400) * 4.4217);
+  }
+
+  cost += 38.22; // ค่าบริการเพิ่มเติมสำหรับรายเดือน
+  return Number(cost.toFixed(4));
+}
+
+// กำหนดข้อมูลสำหรับกราฟ
 const chartData = computed(() => ({
   labels: sensorData.value.map(d => {
     const date = toZonedTime(new Date(d.timestamp), 'Asia/Bangkok');
@@ -127,7 +149,7 @@ const chartOptions = {
   },
 };
 
-// Functions
+// ฟังก์ชันดึงข้อมูล
 const fetchData = async () => {
   isLoading.value = true;
   error.value = null;
@@ -141,7 +163,7 @@ const fetchData = async () => {
 
     if (!response.ok) throw new Error('ไม่สามารถดึงข้อมูลได้');
     let data = await response.json();
-    
+
     data = data.sort((a: SensorData, b: SensorData) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     sensorData.value = data;
 
@@ -162,16 +184,17 @@ const fetchData = async () => {
   }
 };
 
-// Watchers and lifecycle hooks
+// Watchers และ Lifecycle hooks
 watch(selectedDate, () => {
   fetchData();
 });
 
 onMounted(() => {
   fetchData();
-  setInterval(fetchData,  20000);
+  setInterval(fetchData, 20000);
 });
 </script>
+
 
 <template>
   <div class="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-8">
@@ -225,7 +248,7 @@ onMounted(() => {
             <div>
               <div class="text-lg font-semibold text-gray-700">ค่าไฟฟ้าประมาณการรายเดือน</div>
               <div class="text-3xl font-bold text-pink-600">{{ monthlyEnergy }} kWh</div>
-              <div class="text-md text-gray-500 mt-2">ค่าไฟฟ้า: {{ monthlyCost }} บาท (ต่อเดือน)</div>
+              <div class="text-md text-gray-500 mt-2">ค่าไฟฟ้า: {{ monthlyCost }} บาท (ต่อเดือน + ค่าบริการต่างๆ)</div>
             </div>
           </div>
         </div>
