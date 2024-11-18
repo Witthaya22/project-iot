@@ -10,7 +10,7 @@ const getLatestSensorData = async (req, res) => {
     res.header("Access-Control-Allow-Methods", "GET, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-    if (!data) {
+    if (!data || data.energy === 0) {  // เพิ่มการเช็คเพื่อให้ข้ามกรณีที่ energy เป็น 0
       return res.status(404).json({ message: "No data found" });
     }
 
@@ -39,19 +39,22 @@ const getHistoricalData = async (req, res) => {
     }
 
     // ดึงข้อมูลจากฐานข้อมูล
-    const data = await query;
+    let data = await query;
 
     // ตั้งค่าการอนุญาตสำหรับการเข้าถึงจากโดเมนต่าง ๆ
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Methods", "GET, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
+    // กรองข้อมูลที่ energy ไม่เท่ากับ 0
+    data = data.filter(reading => reading.energy !== 0);
+
     // ตรวจสอบว่ามีข้อมูลหรือไม่
     if (data.length === 0) {
       return res.status(404).json({ message: "No data found" });
     }
 
-    // ส่งข้อมูลทั้งหมดกลับไป โดยไม่กรองข้อมูลที่ energy เป็น 0
+    // ส่งข้อมูลทั้งหมดกลับไป
     res.json(data);
   } catch (error) {
     console.error("Error fetching historical data:", error);

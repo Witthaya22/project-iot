@@ -45,8 +45,10 @@ const monthlyEnergy = computed(() => {
 
 // คำนวณค่าใช้จ่ายรายวัน (ไม่รวมค่าบริการรายเดือน)
 const dailyCost = computed(() => {
-  return calculateDailyCost(dailyEnergy.value);
+  const energy = dailyEnergy.value;
+  return energy > 0 ? calculateDailyCost(energy) : 8.19;
 });
+
 
 // คำนวณค่าใช้จ่ายรายเดือน (รวมค่าบริการรายเดือน)
 const monthlyCost = computed(() => {
@@ -59,34 +61,51 @@ function calculateDailyCost(energy: number) {
 
   let cost = 0;
 
-  if (energy <= 150) {
-    cost = energy * 3.2484;
+  if (energy <= 15) {
+    cost = energy * 2.3488;
+  } else if (energy <= 25) {
+    cost = (15 * 2.3488) + ((energy - 15) * 2.9882);
+  } else if (energy <= 35) {
+    cost = (15 * 2.3488) + (10 * 2.9882) + ((energy - 25) * 3.2405);
+  } else if (energy <= 100) {
+    cost = (15 * 2.3488) + (10 * 2.9882) + (10 * 3.2405) + ((energy - 35) * 3.6237);
+  } else if (energy <= 150) {
+    cost = (15 * 2.3488) + (10 * 2.9882) + (10 * 3.2405) + (65 * 3.6237) + ((energy - 100) * 3.7171);
   } else if (energy <= 400) {
-    cost = (150 * 3.2484) + ((energy - 150) * 4.2218);
+    cost = (15 * 2.3488) + (10 * 2.9882) + (10 * 3.2405) + (65 * 3.6237) + (50 * 3.7171) + ((energy - 150) * 4.2218);
   } else {
-    cost = (150 * 3.2484) + (250 * 4.2218) + ((energy - 400) * 4.4217);
+    cost = (15 * 2.3488) + (10 * 2.9882) + (10 * 3.2405) + (65 * 3.6237) + (50 * 3.7171) + (250 * 4.2218) + ((energy - 400) * 4.4217);
   }
 
   return Number(cost.toFixed(4));
 }
+  
 
 // ฟังก์ชันคำนวณค่าไฟฟ้ารายเดือน (รวมค่าบริการ)
-function calculateMonthlyCost(energy: number) {
-  if (energy === 0) return 38.22; // รวมค่าบริการขั้นต่ำ
+function calculateMonthlyCost(energy: number): number {
+  if (energy === 0) return 8.19; // กรณีใช้พลังงานเป็น 0 หน่วย
 
   let cost = 0;
 
   if (energy <= 150) {
-    cost = energy * 3.2484;
-  } else if (energy <= 400) {
-    cost = (150 * 3.2484) + ((energy - 150) * 4.2218);
+    // ใช้พลังงานไม่เกิน 150 หน่วย
+    cost = (Math.min(energy, 15) * 2.3488) +
+           (Math.max(0, Math.min(energy - 15, 10)) * 2.9882) +
+           (Math.max(0, Math.min(energy - 25, 10)) * 3.2405) +
+           (Math.max(0, Math.min(energy - 35, 65)) * 3.6237) +
+           (Math.max(0, Math.min(energy - 100, 50)) * 3.7171);
+    cost += 8.19; // รวมค่าบริการขั้นต่ำ
   } else {
-    cost = (150 * 3.2484) + (250 * 4.2218) + ((energy - 400) * 4.4217);
+    // ใช้พลังงานเกิน 150 หน่วย
+    cost = (150 * 3.2484) +
+           (Math.max(0, Math.min(energy - 150, 250)) * 4.2218) +
+           (Math.max(0, energy - 400) * 4.4217);
+    cost += 24.62; // รวมค่าบริการคงที่
   }
 
-  cost += 38.22; // ค่าบริการเพิ่มเติมสำหรับรายเดือน
   return Number(cost.toFixed(4));
 }
+
 
 // กำหนดข้อมูลสำหรับกราฟ
 const chartData = computed(() => ({
@@ -150,6 +169,7 @@ const chartOptions = {
 };
 
 // ฟังก์ชันดึงข้อมูล
+// ฟังก์ชันดึงข้อมูล
 const fetchData = async () => {
   isLoading.value = true;
   error.value = null;
@@ -161,12 +181,17 @@ const fetchData = async () => {
       `http://localhost:4000/get-sensor-history?start=${start.toISOString()}&end=${end.toISOString()}`
     );
 
-    if (!response.ok) throw new Error('ไม่สามารถดึงข้อมูลได้');
+    if (!response.ok) throw new Error('ไม่สามารถดึงข้อมูลได้ เกิดข้อผิดพลาดในการดึงข้อมูล');
     let data = await response.json();
 
-    data = data.sort((a: SensorData, b: SensorData) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-    sensorData.value = data;
+    if (data.length === 0) {
+      sensorData.value = []; // ล้างข้อมูลเก่าเมื่อไม่มีข้อมูลใหม่
+    } else {
+      data = data.sort((a: SensorData, b: SensorData) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      sensorData.value = data;
+    }
 
+    // ดึงข้อมูลสำหรับเดือนปัจจุบัน
     const monthStart = startOfMonth(new Date(selectedDate.value));
     const monthEnd = endOfMonth(new Date(selectedDate.value));
     const monthResponse = await fetch(
@@ -175,10 +200,18 @@ const fetchData = async () => {
 
     if (monthResponse.ok) {
       let monthData = await monthResponse.json();
-      monthlyData.value = monthData.sort((a: SensorData, b: SensorData) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      if (monthData.length === 0) {
+        monthlyData.value = []; // ล้างข้อมูลเก่าเมื่อไม่มีข้อมูลใหม่
+      } else {
+        monthlyData.value = monthData.sort((a: SensorData, b: SensorData) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      }
+    } else {
+      monthlyData.value = []; // ล้างข้อมูลเก่าในกรณีไม่สามารถดึงข้อมูลได้
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการดึงข้อมูล';
+    sensorData.value = []; // ล้างข้อมูลเก่าเมื่อเกิดข้อผิดพลาด
+    monthlyData.value = []; // ล้างข้อมูลเก่าเมื่อเกิดข้อผิดพลาด
   } finally {
     isLoading.value = false;
   }
@@ -191,14 +224,19 @@ watch(selectedDate, () => {
 
 onMounted(() => {
   fetchData();
-  setInterval(fetchData, 20000);
+  setInterval(fetchData, 30000);
 });
 </script>
-
 
 <template>
   <div class="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
+
+      <!-- Error Alert -->
+      <div v-if="error" class="alert alert-error mb-6 bg-red-100 text-red-800 border border-red-400 rounded-lg p-4">
+        <span>{{ error }}</span>
+      </div>
+
       <!-- Header Section -->
       <div class="text-center mb-8">
         <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-2">
@@ -209,7 +247,7 @@ onMounted(() => {
 
       <!-- Main Card Section -->
       <div class="bg-white/80 backdrop-blur-md shadow-lg rounded-xl p-6 mb-8">
-        
+
         <!-- Date Selection Section -->
         <div class="flex flex-col md:flex-row items-center justify-center gap-4 mb-8">
           <label class="text-gray-600 font-semibold">เลือกวันที่:</label>
@@ -226,11 +264,16 @@ onMounted(() => {
           </button>
         </div>
 
+        <!-- Alert when no data is found -->
+        <div v-if="!isLoading && !sensorData.length" class="alert alert-info bg-blue-100 text-blue-800 border border-blue-400 rounded-lg p-4 mb-8">
+          <span>ไม่พบข้อมูลสำหรับวันที่เลือก กรุณาเลือกวันที่อื่น</span>
+        </div>
+
         <!-- Stats Cards Section -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div v-if="!isLoading && sensorData.length" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <!-- Daily Energy Card -->
           <div class="bg-white p-6 rounded-lg shadow-md flex items-center">
             <div class="mr-4">
-              <!-- Use image from URL for daily energy icon -->
               <img src="../assets/images/calendar.png" alt="Daily Energy Icon" class="h-12 w-12" />
             </div>
             <div>
@@ -239,50 +282,44 @@ onMounted(() => {
               <div class="text-md text-gray-500 mt-2">ค่าไฟฟ้า: {{ dailyCost }} บาท (ต่อวัน)</div>
             </div>
           </div>
-          
+
+          <!-- Monthly Energy Card -->
           <div class="bg-white p-6 rounded-lg shadow-md flex items-center">
             <div class="mr-4">
-              <!-- Use image from URL for monthly energy icon -->
               <img src="../assets/images/month (1).png" alt="Monthly Energy Icon" class="h-12 w-12" />
             </div>
             <div>
               <div class="text-lg font-semibold text-gray-700">ค่าไฟฟ้าประมาณการรายเดือน</div>
               <div class="text-3xl font-bold text-pink-600">{{ monthlyEnergy }} kWh</div>
-              <div class="text-md text-gray-500 mt-2">ค่าไฟฟ้า: {{ monthlyCost }} บาท (ต่อเดือน + ค่าบริการต่างๆ)</div>
+            </div>
+          </div>
+
+          <!-- Summary Electricity Cost Card -->
+          <div class="bg-white p-6 rounded-lg shadow-md flex items-center">
+            <div class="mr-4">
+              <img src="../assets/images/eco-house.png" alt="Electricity Summary Icon" class="h-12 w-12" />
+            </div>
+            <div>
+              <div class="text-lg font-semibold text-gray-700">ค่าไฟฟ้าสรุป</div>
+              <div class="text-3xl font-bold text-green-600">{{ monthlyCost }} บาท</div>
+              <div class="text-md text-gray-500 mt-2">ค่าไฟฟ้า (รวมค่าบริการต่างๆ)</div>
             </div>
           </div>
         </div>
 
         <!-- Chart Section -->
         <div class="relative bg-white p-6 rounded-lg shadow-md h-[400px]">
-          <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center bg-gray-100 bg-opacity-50 z-10">
-            <span class="loading loading-spinner loading-lg text-primary"></span>
+          <Line :data="chartData" :options="chartOptions" />
+          <div v-if="!isLoading && !sensorData.length" class="absolute inset-0 flex items-center justify-center bg-white/50">
+            <span class="text-gray-500 text-lg">ไม่พบข้อมูลสำหรับวันที่เลือก กรุณาเลือกวันที่อื่น</span>
           </div>
-          
-          <template v-if="!isLoading">
-            <Line
-              v-if="sensorData.length && chartData.labels.length"
-              :data="chartData"
-              :options="chartOptions"
-            />
-            <div v-else class="h-full flex items-center justify-center">
-              <div class="text-center">
-                <div class="text-2xl mb-2">ไม่พบข้อมูล</div>
-                <p class="text-gray-500">กรุณาเลือกวันที่อื่น หรือตรวจสอบการเชื่อมต่อ</p>
-              </div>
-            </div>
-          </template>
-        </div>
-
-        <!-- Error Alert -->
-        <div v-if="error" class="alert alert-error mt-6 bg-red-100 text-red-800 border border-red-400 rounded-lg p-4">
-          <img src="https://example.com/error_icon.png" alt="Error Icon" class="h-6 w-6 mr-2" />
-          <span>{{ error }}</span>
         </div>
       </div>
     </div>
   </div>
 </template>
+
+
 
 
 <style scoped>
