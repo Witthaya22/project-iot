@@ -1,4 +1,38 @@
 <template>
+  <nav class="bg-white/90 backdrop-blur-md border-b border-gray-200 shadow-lg p-4 md:p-6">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <!-- Logo Section -->
+      <div class="flex items-center gap-3">
+        <img src="../assets/images/electricity.png" alt="Logo" class="h-10 w-10" />
+        <span class="text-xl md:text-2xl font-bold text-blue-600">
+          ระบบติดตามพลังงาน
+        </span>
+      </div>
+
+      <!-- Navigation Links -->
+      <div class="hidden md:flex space-x-6">
+        <router-link
+          to="/"
+          class="text-gray-600 font-medium hover:text-blue-600 transition-colors duration-200"
+          :class="{ 'text-blue-600 font-bold': $route.path === '/' }"
+        >
+          หน้าหลัก
+        </router-link>
+        <router-link
+          to="/monthly-summary"
+          class="text-gray-600 font-medium hover:text-blue-600 transition-colors duration-200"
+          :class="{ 'text-blue-600 font-bold': $route.path === '/monthly-summary' }"
+        >
+          สรุปรายเดือน
+        </router-link>
+      </div>
+
+      
+    </div>
+
+    
+  </nav>
+
   <div class="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-8">
     <!-- Header -->
     <h2 class="text-center text-3xl font-semibold text-gray-800 mb-8">หน้าแสดงข้อมูลจาก Sensor</h2>

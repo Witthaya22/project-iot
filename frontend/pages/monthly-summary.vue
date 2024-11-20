@@ -224,7 +224,7 @@ watch(selectedDate, () => {
 
 onMounted(() => {
   fetchData();
-  setInterval(fetchData, 30000);
+  setInterval(fetchData,55000);
 });
 </script>
 
@@ -235,7 +235,7 @@ onMounted(() => {
       <div class="flex items-center gap-3">
         <img src="../assets/images/electricity.png" alt="Logo" class="h-10 w-10" />
         <span class="text-xl md:text-2xl font-bold text-blue-600">
-          ระบบติดตามพลังงาน
+          แพลตฟอร์มแสดงผลและจัดการพลังงานผ่านระบบ IOT
         </span>
       </div>
 
@@ -253,7 +253,7 @@ onMounted(() => {
           class="text-gray-600 font-medium hover:text-blue-600 transition-colors duration-200"
           :class="{ 'text-blue-600 font-bold': $route.path === '/monthly-summary' }"
         >
-          สรุปรายเดือน
+        รายละเอียด
         </router-link>
       </div>
 
