@@ -3,7 +3,7 @@
     <div class="max-w-7xl mx-auto flex items-center justify-between">
       <!-- Logo Section -->
       <div class="flex items-center gap-3">
-        <img src="../assets/images/electricity.png" alt="Logo" class="h-10 w-10" />
+        <img src="../assets/images/1.png" alt="Logo" class="h-10 w-10" />
         <span class="text-xl md:text-2xl font-bold text-blue-600">
           แพลตฟอร์มแสดงผลและจัดการพลังงานผ่านระบบ IOT
         </span>

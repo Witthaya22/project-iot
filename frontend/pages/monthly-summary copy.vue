@@ -5,9 +5,6 @@ import { Line } from 'vue-chartjs';
 import { format, startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
 import { th } from 'date-fns/locale';
 import { toZonedTime } from 'date-fns-tz';
-// const tf = require('@tensorflow/tfjs');
-const selectedMonth = ref(new Date().toISOString().substr(0, 7)); //
-
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
@@ -21,87 +18,12 @@ interface SensorData {
   pf: number;
 }
 
-
-
 // State
 const selectedDate = ref(format(new Date(), 'yyyy-MM-dd'));
 const isLoading = ref(false);
 const sensorData = ref<SensorData[]>([]);
 const monthlyData = ref<SensorData[]>([]);
 const error = ref<string | null>(null);
-  const availableDates = ref<string[]>([]);
-
-  const predictedEnergy = ref(0);
-const predictedCost = ref(0);
-
-console.log('Monthly Data:', monthlyData.value);
-const predictNextMonth = async () => {
-  if (monthlyData.value.length > 0) {
-    const lastMonthData = monthlyData.value[monthlyData.value.length - 1];
-    console.log('Last Month Power:', lastMonthData.power); // ตรวจสอบค่ากำลังไฟฟ้าของเดือนล่าสุด
-
-    try {
-      const response = await fetch('http://localhost:4000/predict-power', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ power: lastMonthData.power }) // ส่งค่าพลังงานล่าสุด
-      });
-
-      if (response.ok) {
-        const { energy } = await response.json();
-        console.log('Predicted Energy:', energy); // ตรวจสอบค่าพลังงานที่พยากรณ์
-        predictedEnergy.value = Number(energy.toFixed(2));
-        predictedCost.value = calculateMonthlyCost(predictedEnergy.value);
-        console.log('Calculated Cost:', predictedCost.value); // ตรวจสอบค่าที่คำนวณได้
-      } else {
-        const errorText = await response.text();
-        console.error('Error fetching prediction:', response.statusText, errorText);
-      }
-    } catch (error) {
-      console.error('Error in prediction:', error);
-    }
-  } else {
-    console.log('No monthly data available for prediction.');
-  }
-};
-const fetchMonthlyData = async () => {
-  try {
-    const monthStart = startOfMonth(new Date(selectedMonth.value)); // ใช้ selectedMonth แทน selectedDate
-    const monthEnd = endOfMonth(new Date(selectedMonth.value));
-    const monthResponse = await fetch(`http://localhost:4000/get-sensor-history?start=${monthStart.toISOString()}&end=${monthEnd.toISOString()}`);
-
-    if (monthResponse.ok) {
-      const monthData = await monthResponse.json();
-      monthlyData.value = monthData.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-      // คำนวณพลังงานรวมในเดือนนี้
-      const totalEnergy = monthlyData.value.reduce((sum, reading) => sum + (reading.power / 60), 0);
-      console.log('Total Energy for the month:', totalEnergy);
-
-      // เรียกใช้ฟังก์ชัน predictNextMonth ที่นี่
-      await predictNextMonth(); // เรียกใช้ฟังก์ชันเพื่อทำการทำนาย
-    } else {
-      console.error('Failed to fetch monthly data:', monthResponse.statusText);
-    }
-  } catch (error) {
-    console.error('Error fetching monthly data:', error);
-  }
-};
-  const fetchAvailableDates = async () => {
-  try {
-    const response = await fetch('http://localhost:4000/get-available-dates');
-    if (response.ok) {
-      const dates = await response.json();
-      // แปลง timestamps เป็นรูปแบบ yyyy-MM-dd
-      availableDates.value = dates.map((date: string) => 
-        format(new Date(date), 'yyyy-MM-dd')
-      );
-    }
-  } catch (err) {
-    console.error('Error fetching available dates:', err);
-  }
-};
-
 
 // คำนวณพลังงานรายวันจากกำลังไฟฟ้าทุก 1 นาที
 const dailyEnergy = computed(() => {
@@ -113,29 +35,11 @@ const dailyEnergy = computed(() => {
 });
 
 // คำนวณพลังงานรายเดือนจากกำลังไฟฟ้าทุก 1 นาที
-// คำนวณพลังงานรายเดือนจากกำลังไฟฟ้าทุก 1 นาที
 const monthlyEnergy = computed(() => {
   if (!monthlyData.value.length) return 0;
 
-  let totalEnergy = 0;
-  const dailyEnergies = new Map<string, number>();
-
-  // คำนวณพลังงานรายวัน
-  monthlyData.value.forEach(reading => {
-    const day = format(new Date(reading.timestamp), 'yyyy-MM-dd');
-    const energy = reading.power / 60; // แปลงเป็น Wh
-    
-    if (!dailyEnergies.has(day)) {
-      dailyEnergies.set(day, 0);
-    }
-    dailyEnergies.set(day, dailyEnergies.get(day)! + energy);
-  });
-
-  // รวมพลังงานทั้งเดือน
-  dailyEnergies.forEach(energy => {
-    totalEnergy += energy;
-  });
-
+  // คำนวณพลังงานในหน่วย Wh จากข้อมูลกำลังไฟฟ้า (กำลัง W * เวลา (1/60 ชั่วโมง))
+  const totalEnergy = monthlyData.value.reduce((sum, reading) => sum + (reading.power / 60), 0);
   return Number((totalEnergy / 1000).toFixed(4)); // แปลงเป็น kWh
 });
 
@@ -148,9 +52,7 @@ const dailyCost = computed(() => {
 
 // คำนวณค่าใช้จ่ายรายเดือน (รวมค่าบริการรายเดือน)
 const monthlyCost = computed(() => {
-  // ใช้ค่าพลังงานรวมทั้งเดือน
-  const energy = monthlyEnergy.value;
-  return calculateMonthlyCost(energy);
+  return calculateMonthlyCost(monthlyEnergy.value);
 });
 
 // ฟังก์ชันคำนวณค่าไฟฟ้าจากพลังงานที่ใช้ (หน่วย kWh) สำหรับรายวัน
@@ -273,26 +175,23 @@ const fetchData = async () => {
   error.value = null;
 
   try {
-    // ดึงข้อมูลรายวัน
     const start = startOfDay(new Date(selectedDate.value));
     const end = endOfDay(new Date(selectedDate.value));
     const response = await fetch(
       `http://localhost:4000/get-sensor-history?start=${start.toISOString()}&end=${end.toISOString()}`
     );
 
-    if (!response.ok) throw new Error('ไม่สามารถดึงข้อมูลได้');
+    if (!response.ok) throw new Error('ไม่สามารถดึงข้อมูลได้ เกิดข้อผิดพลาดในการดึงข้อมูล');
     let data = await response.json();
-    
-    // จัดการข้อมูลรายวัน
+
     if (data.length === 0) {
-      sensorData.value = [];
+      sensorData.value = []; // ล้างข้อมูลเก่าเมื่อไม่มีข้อมูลใหม่
     } else {
-      sensorData.value = data.sort((a: SensorData, b: SensorData) => 
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-      );
+      data = data.sort((a: SensorData, b: SensorData) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      sensorData.value = data;
     }
 
-    // ดึงข้อมูลรายเดือน
+    // ดึงข้อมูลสำหรับเดือนปัจจุบัน
     const monthStart = startOfMonth(new Date(selectedDate.value));
     const monthEnd = endOfMonth(new Date(selectedDate.value));
     const monthResponse = await fetch(
@@ -300,16 +199,19 @@ const fetchData = async () => {
     );
 
     if (monthResponse.ok) {
-      const monthData = await monthResponse.json();
-      monthlyData.value = monthData.sort((a: SensorData, b: SensorData) => 
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-      );
+      let monthData = await monthResponse.json();
+      if (monthData.length === 0) {
+        monthlyData.value = []; // ล้างข้อมูลเก่าเมื่อไม่มีข้อมูลใหม่
+      } else {
+        monthlyData.value = monthData.sort((a: SensorData, b: SensorData) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      }
+    } else {
+      monthlyData.value = []; // ล้างข้อมูลเก่าในกรณีไม่สามารถดึงข้อมูลได้
     }
-
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการดึงข้อมูล';
-    sensorData.value = [];
-    monthlyData.value = [];
+    sensorData.value = []; // ล้างข้อมูลเก่าเมื่อเกิดข้อผิดพลาด
+    monthlyData.value = []; // ล้างข้อมูลเก่าเมื่อเกิดข้อผิดพลาด
   } finally {
     isLoading.value = false;
   }
@@ -322,9 +224,7 @@ watch(selectedDate, () => {
 
 onMounted(() => {
   fetchData();
-  fetchAvailableDates();
-  fetchMonthlyData(); // เรียกใช้เพื่อดึงข้อมูลเดือนแรก
-  setInterval(fetchData, 55000);
+  setInterval(fetchData,55000);
 });
 </script>
 
@@ -333,7 +233,7 @@ onMounted(() => {
     <div class="max-w-7xl mx-auto flex items-center justify-between">
       <!-- Logo Section -->
       <div class="flex items-center gap-3">
-        <img src="../assets/images/1.png" alt="Logo" class="h-10 w-10" />
+        <img src="../assets/images/electricity.png" alt="Logo" class="h-10 w-10" />
         <span class="text-xl md:text-2xl font-bold text-blue-600">
           แพลตฟอร์มแสดงผลและจัดการพลังงานผ่านระบบ IOT
         </span>
@@ -382,91 +282,74 @@ onMounted(() => {
 
       <!-- Main Card Section -->
       <div class="bg-white/80 backdrop-blur-md shadow-lg rounded-xl p-6 mb-8">
-    <!-- Date Selection Section -->
-    <div class="flex flex-col md:flex-row items-center justify-center gap-4 mb-8">
-    <label class="text-gray-600 font-semibold">เลือกวันที่:</label>
-    <div class="w-full max-w-xs">
-      <CustomDatePicker
-        v-model="selectedDate"
-        :available-dates="availableDates"
-        @date-selected="fetchData"
-      />
-    </div>
-    <button
-      @click="fetchData"
-      class="btn btn-primary bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-all"
-    >
-      อัปเดตข้อมูล
-    </button>
 
-    <div>
-    <label for="month-picker">เลือกเดือน:</label>
-    <input type="month" id="month-picker" v-model="selectedMonth" @change="fetchMonthlyData" />
-  </div>
-  </div>
-
-    <!-- Stats Cards Section - แสดงตลอดโดยไม่มีเงื่อนไข -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-      <!-- Daily Energy Card -->
-      <div class="bg-white p-6 rounded-lg shadow-md flex items-center">
-        <div class="mr-4">
-          <img src="../assets/images/calendar.png" alt="Daily Energy Icon" class="h-12 w-12" />
+        <!-- Date Selection Section -->
+        <div class="flex flex-col md:flex-row items-center justify-center gap-4 mb-8">
+          <label class="text-gray-600 font-semibold">เลือกวันที่:</label>
+          <input
+            type="date"
+            v-model="selectedDate"
+            class="input input-bordered w-full max-w-xs border-gray-300 bg-white/90 rounded-lg focus:ring focus:ring-blue-500"
+          />
+          <button
+            @click="fetchData"
+            class="btn btn-primary bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-all"
+          >
+            อัปเดตข้อมูล
+          </button>
         </div>
-        <div>
-          <div class="text-lg font-semibold text-gray-700">การใช้พลังงานในช่วงที่เลือก</div>
-          <div class="text-3xl font-bold text-blue-600">{{ dailyEnergy }} kWh</div>
-          <div class="text-md text-gray-500 mt-2">ค่าไฟฟ้า: {{ dailyCost }} บาท (ต่อวัน)</div>
+
+        <!-- Alert when no data is found -->
+        <div v-if="!isLoading && !sensorData.length" class="alert alert-info bg-blue-100 text-blue-800 border border-blue-400 rounded-lg p-4 mb-8">
+          <span>ไม่พบข้อมูลสำหรับวันที่เลือก กรุณาเลือกวันที่อื่น</span>
+        </div>
+
+        <!-- Stats Cards Section -->
+        <div v-if="!isLoading && sensorData.length" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <!-- Daily Energy Card -->
+          <div class="bg-white p-6 rounded-lg shadow-md flex items-center">
+            <div class="mr-4">
+              <img src="../assets/images/calendar.png" alt="Daily Energy Icon" class="h-12 w-12" />
+            </div>
+            <div>
+              <div class="text-lg font-semibold text-gray-700">การใช้พลังงานในช่วงที่เลือก</div>
+              <div class="text-3xl font-bold text-blue-600">{{ dailyEnergy }} kWh</div>
+              <div class="text-md text-gray-500 mt-2">ค่าไฟฟ้า: {{ dailyCost }} บาท (ต่อวัน)</div>
+            </div>
+          </div>
+
+          <!-- Monthly Energy Card -->
+          <div class="bg-white p-6 rounded-lg shadow-md flex items-center">
+            <div class="mr-4">
+              <img src="../assets/images/month (1).png" alt="Monthly Energy Icon" class="h-12 w-12" />
+            </div>
+            <div>
+              <div class="text-lg font-semibold text-gray-700">ค่าไฟฟ้าประมาณการรายเดือน</div>
+              <div class="text-3xl font-bold text-pink-600">{{ monthlyEnergy }} kWh</div>
+            </div>
+          </div>
+
+          <!-- Summary Electricity Cost Card -->
+          <div class="bg-white p-6 rounded-lg shadow-md flex items-center">
+            <div class="mr-4">
+              <img src="../assets/images/eco-house.png" alt="Electricity Summary Icon" class="h-12 w-12" />
+            </div>
+            <div>
+              <div class="text-lg font-semibold text-gray-700">ค่าไฟฟ้าสรุป</div>
+              <div class="text-3xl font-bold text-green-600">{{ monthlyCost }} บาท</div>
+              <div class="text-md text-gray-500 mt-2">ค่าไฟฟ้า (รวมค่าบริการต่างๆ)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chart Section -->
+        <div class="relative bg-white p-6 rounded-lg shadow-md h-[400px]">
+          <Line :data="chartData" :options="chartOptions" />
+          <div v-if="!isLoading && !sensorData.length" class="absolute inset-0 flex items-center justify-center bg-white/50">
+            <span class="text-gray-500 text-lg">ไม่พบข้อมูลสำหรับวันที่เลือก กรุณาเลือกวันที่อื่น</span>
+          </div>
         </div>
       </div>
-
-      <!-- Monthly Energy Card -->
-      <div class="bg-white p-6 rounded-lg shadow-md flex items-center">
-        <div class="mr-4">
-          <img src="../assets/images/month (1).png" alt="Monthly Energy Icon" class="h-12 w-12" />
-        </div>
-        <div>
-          <div class="text-lg font-semibold text-gray-700">ค่าไฟฟ้าประมาณการรายเดือน</div>
-          <div class="text-3xl font-bold text-pink-600">{{ monthlyEnergy }} kWh</div>
-        </div>
-      </div>
-
-      <!-- Summary Electricity Cost Card -->
-      <div class="bg-white p-6 rounded-lg shadow-md flex items-center">
-        <div class="mr-4">
-          <img src="../assets/images/eco-house.png" alt="Electricity Summary Icon" class="h-12 w-12" />
-        </div>
-        <div>
-          <div class="text-lg font-semibold text-gray-700">ค่าไฟฟ้าสรุป</div>
-          <div class="text-3xl font-bold text-green-600">{{ monthlyCost }} บาท</div>
-          <div class="text-md text-gray-500 mt-2">ค่าไฟฟ้า (รวมค่าบริการต่างๆ)</div>
-        </div>
-      </div>
-
-      <!-- Predicted Energy Card -->
-  <div class="bg-white p-6 rounded-lg shadow-md flex items-center">
-    <div class="mr-4">
-      <img src="../assets/images/bill.png" alt="Prediction Icon" class="h-12 w-12" />
-    </div>
-    <div>
-      <div class="text-lg font-semibold text-gray-700">ค่าไฟฟ้าพยากรณ์เดือนถัดไป</div>
-      <div class="text-3xl font-bold text-gray-500 mt-2">ประมาณ {{ predictedCost }} บาท</div>
-      <div class="text-md font-bold text-purple-600">{{ predictedEnergy }} kWh</div>
-    </div>
-  </div>
-
-    </div>
-
-
-    <!-- Chart Section - แสดงเฉพาะเมื่อมีข้อมูล -->
-    <div v-if="sensorData.length > 0" class="relative bg-white p-6 rounded-lg shadow-md h-[400px]">
-      <Line :data="chartData" :options="chartOptions" />
-    </div>
-    
-    <!-- แสดงข้อความเมื่อไม่มีข้อมูล -->
-    <div v-if="!isLoading && !sensorData.length" class="alert alert-info bg-blue-100 text-blue-800 border border-blue-400 rounded-lg p-4">
-      <span>ไม่พบข้อมูลสำหรับวันที่เลือก กรุณาเลือกวันที่อื่น</span>
-    </div>
-  </div>
     </div>
   </div>
 </template>

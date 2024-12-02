@@ -2,84 +2,36 @@ const db = require("../config");
 const tf = require('@tensorflow/tfjs'); 
 const { format } = require('date-fns');
 
-const trainModel = async () => {
+const predictEnergyConsumption = async (req, res) => {
   try {
     // ดึงข้อมูลประวัติจากฐานข้อมูล
     const historicalData = await db("sensor_readings")
-      .select('power', 'timestamp')
+      .select('power')
       .where('power', '>', 0)
       .orderBy("timestamp", "asc");
 
-    // เตรียมข้อมูลสำหรับการฝึก
-    const inputs = historicalData.map(item => {
-      const date = new Date(item.timestamp);
-      return [
-        date.getHours(), // ชั่วโมง
-        date.getDay(),   // วันในสัปดาห์
-        date.getMonth(), // เดือน
-        date.getFullYear() // ปี
-      ];
-    });
+    // ตรวจสอบว่ามีข้อมูลหรือไม่
+    if (historicalData.length === 0) {
+      return res.status(404).json({ error: "No historical data available for prediction." });
+    }
 
-    const outputs = historicalData.map(item => item.power);
+    // แยกค่าพลังงานออก
+    const powerValues = historicalData.map(item => item.power);
 
-    // สร้าง TensorFlow.js tensors
-    const xs = tf.tensor2d(inputs);
-    const ys = tf.tensor2d(outputs, [outputs.length, 1]);
+    // คำนวณพลังงานรวมในเดือนล่าสุด
+    const totalPower = powerValues.reduce((acc, value) => acc + value, 0);
+    const averagePower = totalPower / powerValues.length; // คำนวณค่าเฉลี่ย
 
-    // สร้างโมเดล
-    const model = tf.sequential();
-    model.add(tf.layers.dense({ units: 1, inputShape: [4] }));
-
-    // คอมไพล์โมเดล
-    model.compile({ loss: 'meanSquaredError', optimizer: 'sgd' });
-
-    // ฝึกโมเดล
-    await model.fit(xs, ys, { epochs: 100 });
-
-    console.log("Model trained successfully!");
-
-    return model;
-  } catch (error) {
-    console.error("Error training model:", error);
-  }
-};
-
-const predictEnergyConsumption = async (req, res) => {
-  try {
-    const historicalData = await db("sensor_readings")
-      .select('power', 'timestamp')
-      .where('power', '>', 0)
-      .orderBy("timestamp", "asc");
-
-    // จัดกลุ่มข้อมูลตามวัน
-    const dailyPower = {};
-    historicalData.forEach(reading => {
-      const day = format(new Date(reading.timestamp), 'yyyy-MM-dd');
-      if (!dailyPower[day]) {
-        dailyPower[day] = [];
-      }
-      dailyPower[day].push(reading.power);
-    });
-
-    // คำนวณพลังงานเฉลี่ยต่อวัน
-    const dailyEnergies = Object.values(dailyPower).map(powers => {
-      return powers.reduce((sum, power) => sum + (power / 60), 0) / 1000; // แปลงเป็น kWh
-    });
-
-    const avgDailyEnergy = dailyEnergies.reduce((sum, energy) => sum + energy, 0) / dailyEnergies.length;
-    const predictedEnergy = avgDailyEnergy * 30; // คำนวณพลังงานต่อเดือน
-
-    const predictedCost = calculateMonthlyCost(predictedEnergy);
+    // ปรับปรุงการคำนวณพลังงานในเดือนถัดไป
+    const predictedEnergy = averagePower * 30; // ใช้ค่าเฉลี่ยเป็นตัวตั้งต้น
+    const predictedCost = calculateMonthlyCost(predictedEnergy / 1000); // แปลงเป็น kWh
 
     console.log('Predicted Energy:', predictedEnergy);
     console.log('Predicted Cost:', predictedCost);
 
-    res.json({ 
-      energy: Number(predictedEnergy.toFixed(2)),
-      cost: Number(predictedCost.toFixed(2))
-    });
+    res.json({ energy: predictedEnergy, cost: predictedCost });
   } catch (error) {
+    console.error("Error in predicting energy consumption:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 };
