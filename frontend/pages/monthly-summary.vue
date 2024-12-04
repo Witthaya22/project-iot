@@ -33,6 +33,48 @@ const error = ref<string | null>(null);
 
   const predictedEnergy = ref(0);
 const predictedCost = ref(0);
+const lightStatus = ref(false);
+
+const toggleLight = async () => {
+  try {
+    // เพิ่มการป้องกันการกดซ้ำ
+    if (isLoading.value) return;
+    isLoading.value = true;
+
+    const response = await fetch('http://localhost:4000/api/control', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        value: lightStatus.value ? 0 : 1,
+        device: 'sw01'
+      })
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      lightStatus.value = result.status === 1;
+    }
+  } catch (error) {
+    console.error('Error toggling light:', error);
+  } finally {
+    isLoading.value = false;
+  }
+};
+const fetchSwitchStatus = async () => {
+  try {
+    const response = await fetch('http://localhost:4000/api/switch-status');
+    if (response.ok) {
+      const { status } = await response.json();
+      if (lightStatus.value !== (status === 1)) { // เช็คว่าสถานะเปลี่ยนแปลงจริงๆ
+        lightStatus.value = status === 1;
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching switch status:', error);
+  }
+};
 
 console.log('Monthly Data:', monthlyData.value);
 const predictNextMonth = async () => {
@@ -323,8 +365,18 @@ watch(selectedDate, () => {
 onMounted(() => {
   fetchData();
   fetchAvailableDates();
-  fetchMonthlyData(); // เรียกใช้เพื่อดึงข้อมูลเดือนแรก
-  setInterval(fetchData, 55000);
+  fetchMonthlyData();
+  fetchSwitchStatus(); // เรียกครั้งแรกเพื่อดึงสถานะเริ่มต้น
+  
+  // ลดความถี่ของการ fetch ข้อมูล
+  const dataInterval = setInterval(fetchData, 60000); // ทุก 1 นาที
+  const statusInterval = setInterval(fetchSwitchStatus, 10000); // ทุก 10 วินาที
+  
+  // Cleanup intervals เมื่อ component ถูกทำลาย
+  onUnmounted(() => {
+    clearInterval(dataInterval);
+    clearInterval(statusInterval);
+  });
 });
 </script>
 
@@ -392,17 +444,66 @@ onMounted(() => {
         @date-selected="fetchData"
       />
     </div>
-    <button
+    <!-- <button
       @click="fetchData"
       class="btn btn-primary bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-all"
     >
       อัปเดตข้อมูล
-    </button>
+    </button> -->
 
-    <div>
+    <!-- เพิ่มส่วนควบคุมไฟที่เข้าใจง่าย -->
+  <div class="flex justify-between items-center">
+    <div class="flex items-center gap-4">
+      <!-- ไอคอนไฟ - เปลี่ยนสีตามสถานะ -->
+      <div class="p-2 rounded-full" :class="[
+        lightStatus 
+          ? 'bg-red-100' 
+          : 'bg-green-100'
+      ]">
+        <div class="h-10 w-10 flex items-center justify-center">
+          <svg v-if="lightStatus" xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          </svg>
+          <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          </svg>
+        </div>
+      </div>
+      <!-- ข้อความสถานะ -->
+      <div>
+        <h3 class="text-lg font-semibold text-gray-700">ควบคุมไฟ</h3>
+        <p class="text-lg font-medium" :class="[
+          lightStatus 
+            ? 'text-red-500' 
+            : 'text-green-500'
+        ]">
+          สถานะ: {{ lightStatus ? '🔴 ปิดการใช้งาน' : '🟢 เปิดใช้งาน' }}
+        </p>
+      </div>
+    </div>
+
+    <!-- ปุ่มควบคุม -->
+    <button
+      @click="toggleLight"
+      :disabled="isLoading"
+      class="px-10 ml-4 py-4 rounded-xl font-medium text-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50"
+      :class="[
+        lightStatus 
+          ? 'bg-red-500 hover:bg-red-600 text-white focus:ring-red-500' 
+          : 'bg-green-500 hover:bg-green-600 text-white focus:ring-green-500'
+      ]"
+    >
+      <span class="flex items-center gap-2">
+        <span v-if="isLoading" class="animate-spin">⌛</span>
+        {{ lightStatus ? '🔴 ปิดไฟ' : '🟢 เปิดไฟ' }}
+      </span>
+    </button>
+  </div>
+
+    <!-- <div>
     <label for="month-picker">เลือกเดือน:</label>
     <input type="month" id="month-picker" v-model="selectedMonth" @change="fetchMonthlyData" />
-  </div>
+  </div> -->
   </div>
 
     <!-- Stats Cards Section - แสดงตลอดโดยไม่มีเงื่อนไข -->
@@ -455,6 +556,7 @@ onMounted(() => {
   </div>
 
     </div>
+    
 
 
     <!-- Chart Section - แสดงเฉพาะเมื่อมีข้อมูล -->

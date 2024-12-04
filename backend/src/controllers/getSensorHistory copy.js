@@ -2,6 +2,8 @@ const db = require("../config");
 const tf = require('@tensorflow/tfjs'); 
 const { format } = require('date-fns');
 
+
+
 const predictEnergyConsumption = async (req, res) => {
   try {
     // ดึงข้อมูลประวัติจากฐานข้อมูล
